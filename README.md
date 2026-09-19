@@ -2,6 +2,8 @@
 
 An all-in-one, self-contained Node.js application (`server.js`) serving a real-time Single Page Application (SPA) for kids' daily routines and chore tracking, complete with a **Parent Management Dashboard** (`/parent`), full CRUD for children and tasks, live status tracking with completion timestamps, persistent daily historical logs, visual task icons, and **Home Assistant (Hass.io) TV Blocking Integration**.
 
+> 🏠 **Looking to host on Proxmox VE?** Check out the **[Proxmox VE Hosting Guide (LXC & Docker)](PROXMOX.md)** for a 1-click Proxmox LXC container installer and Docker setup!
+
 ---
 
 ## Features

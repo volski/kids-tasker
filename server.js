@@ -132,6 +132,10 @@ function normalizeTasksData(data) {
 // Persistence helper functions
 function initTasksStorage() {
   try {
+    const dir = path.dirname(TASKS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     if (!fs.existsSync(TASKS_FILE)) {
       console.log(`[Storage] ${TASKS_FILE} not found. Initializing with default data...`);
       fs.writeFileSync(TASKS_FILE, JSON.stringify(DEFAULT_TASKS_DATA, null, 2), 'utf-8');
@@ -164,6 +168,10 @@ function readTasks() {
 
 function writeTasks(data) {
   try {
+    const dir = path.dirname(TASKS_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     const normalized = normalizeTasksData(data);
     const content = JSON.stringify(normalized, null, 2);
     fs.writeFileSync(TASKS_FILE, content, 'utf-8');

@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.dockerignore
+firebase/
+tasks.json
+test_server.js
+README.md
+PROXMOX.md
+proxmox/
+.DS_Store
+Thumbs.db

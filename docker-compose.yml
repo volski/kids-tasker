@@ -1,0 +1,20 @@
+services:
+  kids-tasker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kids-tasker:latest
+    container_name: kids-tasker
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TASKS_FILE=/app/data/tasks.json
+    volumes:
+      - kids-tasker-data:/app/data
+
+volumes:
+  kids-tasker-data:
+    name: kids_tasker_data
