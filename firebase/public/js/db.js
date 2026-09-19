@@ -133,6 +133,31 @@ export function subscribeToFamily(familyId, onUpdate, onError) {
       onUpdate(initial);
     } else {
       const data = snapshot.data();
+      const today = getTodayDateString();
+
+      // Automatic daily reset: if the app is opened on a new calendar date, auto-reset chores to pending!
+      if (data.lastActiveDate && data.lastActiveDate !== today) {
+        console.log(`[New Day] Detected transition from ${data.lastActiveDate} to ${today}. Auto-resetting daily chores...`);
+        try {
+          (data.children || []).forEach(child => {
+            (child.tasks || []).forEach(task => {
+              task.completed = false;
+              task.completedAt = null;
+            });
+          });
+          data.lastActiveDate = today;
+          if (data.homeAssistant) data.homeAssistant.parentBypass = false;
+          
+          await updateDoc(familyRef, {
+            children: data.children,
+            lastActiveDate: today,
+            'homeAssistant.parentBypass': false
+          });
+        } catch (e) {
+          console.warn('[AutoReset] Automatic day reset notice:', e.message);
+        }
+      }
+
       onUpdate(data);
     }
   }, error => {
