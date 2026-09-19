@@ -605,6 +605,33 @@
 
           <!-- Result feedback container for testing / syncing -->
           <div id="hass-test-result" class="hidden p-4 rounded-xl border text-sm font-medium transition"></div>
+
+          <!-- CORS Guidance Card for Home Assistant -->
+          <div class="p-4 bg-slate-950/70 border border-slate-800 rounded-xl space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 font-bold text-slate-200">
+                <span>🛡️</span>
+                <span>הגדרת CORS ב-Home Assistant (חובה לחיבור ישיר מהדפדפן)</span>
+              </div>
+              <button 
+                type="button" 
+                onclick="window.handleCopyCorsConfig()" 
+                class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] rounded-lg border border-slate-700 transition flex items-center gap-1 shadow-sm"
+              >
+                <span>📋</span>
+                <span>העתק הגדרה</span>
+              </button>
+            </div>
+            <p class="text-slate-400 leading-relaxed">
+              דפדפנים דורשים הרשאת CORS כדי לאפשר בדיקת חיבור וסנכרון ישויות ישירות מ-Kids Tasker. יש להוסיף לקובץ <code class="text-indigo-400 font-bold font-mono">configuration.yaml</code> ב-Home Assistant ולהפעיל מחדש:
+            </p>
+            <pre class="p-2.5 bg-slate-900 rounded-lg border border-slate-800 font-mono text-emerald-400 text-xs dir-ltr text-left overflow-x-auto leading-relaxed">http:
+  cors_allowed_origins:
+    - https://kids-tasker-c0ef6.web.app</pre>
+            <p class="text-[11px] text-slate-500">
+              💡 <b>טיפ:</b> אם כבר יש לך בלוק <code>http:</code> בקובץ, הוסף רק את שורות ה-<code>cors_allowed_origins</code> תחתיו.
+            </p>
+          </div>
         </div>
 
         <!-- Card 2: Lovelace Dashboard Card (Interactive Preview & YAML Generator) -->
@@ -1040,6 +1067,6 @@
   <div id="toast" class="hidden"></div>
 
   <!-- Modular Script (Cache-busted) -->
-  <script type="module" src="/js/parent.js?v=2.3.0"></script>
+  <script type="module" src="/js/parent.js?v=2.3.1"></script>
 </body>
 </html>
