@@ -1,18 +1,28 @@
-// Kids Tablet Controller (Modular Firebase Edition)
+// Kids Tablet Controller (Modular Firebase Edition - Authenticated)
 import { 
   getStoredFamilyId, 
   setStoredFamilyId, 
-  getStoredRole 
+  loginWithGoogle, 
+  logoutUser, 
+  subscribeToAuth 
 } from './firebase-config.js';
 import { 
   subscribeToFamily, 
   toggleTask, 
-  getTodayDateString 
+  getTodayDateString,
+  subscribeToUserProfile,
+  requestJoinFamily,
+  cancelJoinRequest
 } from './db.js';
 
 // DOM Elements
-const boardElem = document.getElementById('board');
+const authLanding = document.getElementById('auth-landing');
+const viewPendingApproval = document.getElementById('view-pending-approval');
+const viewNoFamily = document.getElementById('view-no-family');
 const loadingElem = document.getElementById('loading-spinner');
+const boardElem = document.getElementById('board');
+const pendingFamilyCodeDisplay = document.getElementById('pending-family-code-display');
+
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const statusBadge = document.getElementById('status-badge');
@@ -20,8 +30,15 @@ const tvStatusBadge = document.getElementById('tv-status-badge');
 const currentDateElem = document.getElementById('current-date');
 const familyTitleElem = document.getElementById('family-title');
 
+const userProfileBar = document.getElementById('user-profile-bar');
+const userAvatar = document.getElementById('user-avatar');
+const userDisplayName = document.getElementById('user-display-name');
+
 let currentData = null;
 let currentFamilyId = getStoredFamilyId();
+let currentUser = null;
+let familyUnsubscribe = null;
+let userProfileUnsubscribe = null;
 const pendingToggles = new Set();
 
 // Color themes for children cards
@@ -51,13 +68,14 @@ function formatTime(isoStr) {
 }
 
 function updateConnectionStatus(isConnected) {
+  if (!statusDot || !statusText || !statusBadge) return;
   if (isConnected) {
     statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50';
-    statusText.innerText = 'מחובר ל-Firebase';
+    statusText.innerText = 'מחובר';
     statusBadge.className = 'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-950/60 border border-emerald-800/60 text-emerald-300';
   } else {
     statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse';
-    statusText.innerText = 'מנותק - מתחבר...';
+    statusText.innerText = 'מתחבר...';
     statusBadge.className = 'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-rose-950/60 border border-rose-800/60 text-rose-300';
   }
 }
@@ -94,17 +112,111 @@ function updateTvBadge(data) {
   }
 }
 
-export function showToast(msg) {
+export function showToast(msg, isError = false) {
   const el = document.getElementById('tablet-toast');
   if (!el) return;
   el.innerText = msg;
-  el.classList.remove('opacity-0');
+  el.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 border text-white font-bold rounded-2xl shadow-2xl transition-all duration-300 z-50 text-center text-sm ${
+    isError ? 'bg-rose-600 border-rose-500' : 'bg-slate-800 border-slate-700'
+  }`;
+  el.classList.remove('opacity-0', 'pointer-events-none');
   el.classList.add('opacity-100');
   setTimeout(() => {
     el.classList.remove('opacity-100');
-    el.classList.add('opacity-0');
-  }, 2500);
+    el.classList.add('opacity-0', 'pointer-events-none');
+  }, 2800);
 }
+
+function showView(viewName) {
+  if (authLanding) authLanding.classList.add('hidden');
+  if (viewPendingApproval) viewPendingApproval.classList.add('hidden');
+  if (viewNoFamily) viewNoFamily.classList.add('hidden');
+  if (loadingElem) loadingElem.classList.add('hidden');
+  if (boardElem) boardElem.classList.add('hidden');
+
+  if (viewName === 'auth') {
+    if (authLanding) authLanding.classList.remove('hidden');
+  } else if (viewName === 'pending') {
+    if (viewPendingApproval) viewPendingApproval.classList.remove('hidden');
+  } else if (viewName === 'no-family') {
+    if (viewNoFamily) viewNoFamily.classList.remove('hidden');
+  } else if (viewName === 'loading') {
+    if (loadingElem) loadingElem.classList.remove('hidden');
+  } else if (viewName === 'board') {
+    if (boardElem) boardElem.classList.remove('hidden');
+  }
+}
+
+// User Authentication Actions
+export async function triggerGoogleLogin() {
+  try {
+    showToast('מתחבר ל-Google...');
+    const result = await loginWithGoogle();
+    showToast(`ברוך הבא, ${result.user.displayName || 'משתמש'}!`);
+  } catch (error) {
+    console.error('[Auth Error] Google login failed:', error);
+    showToast(error.message || 'שגיאה בהתחברות ל-Google', true);
+  }
+}
+window.triggerGoogleLogin = triggerGoogleLogin;
+
+export async function triggerLogout() {
+  if (!confirm('האם אתה בטוח שברצונך להתנתק?')) return;
+  if (familyUnsubscribe) familyUnsubscribe();
+  if (userProfileUnsubscribe) userProfileUnsubscribe();
+  await logoutUser();
+  currentUser = null;
+  currentFamilyId = null;
+  setStoredFamilyId(null);
+  showView('auth');
+  if (userProfileBar) userProfileBar.classList.add('hidden');
+  if (familyTitleElem) familyTitleElem.classList.add('hidden');
+  showToast('התנתקת בהצלחה');
+}
+window.triggerLogout = triggerLogout;
+
+export async function triggerCancelJoin() {
+  if (!currentUser) return;
+  const code = pendingFamilyCodeDisplay?.innerText?.trim() || '';
+  try {
+    if (code) {
+      await cancelJoinRequest(currentUser.uid, code);
+    }
+    showToast('בקשת ההצטרפות בוטלה');
+    showView('no-family');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+window.triggerCancelJoin = triggerCancelJoin;
+
+window.triggerDirectJoin = async function() {
+  const input = document.getElementById('direct-join-code-input');
+  const code = input?.value?.trim();
+  if (!code) {
+    showToast('נא להזין קוד משפחה', true);
+    return;
+  }
+  if (!currentUser) {
+    showToast('יש להתחבר עם Google תחילה', true);
+    return;
+  }
+
+  try {
+    showToast('שולח בקשת הצטרפות למנהל המשפחה...');
+    const result = await requestJoinFamily(currentUser.uid, currentUser, code);
+    if (result.status === 'already_approved') {
+      showToast('הנך כבר חבר מאושר במשפחה זו! 🎉');
+      loadFamilyBoard(code);
+    } else {
+      showToast('בקשת ההצטרפות נשלחה וממתינה לאישור מנהל המשפחה 🔒');
+      if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = code;
+      showView('pending');
+    }
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
 
 export async function onTaskClick(childId, taskId) {
   if (currentData) {
@@ -139,32 +251,30 @@ export async function onTaskClick(childId, taskId) {
     await toggleTask(currentFamilyId, childId, taskId, false);
   } catch (err) {
     console.error('Error toggling task:', err);
-    showToast(err.message || 'שגיאה בעדכון משימה');
+    showToast(err.message || 'שגיאה בעדכון משימה', true);
   } finally {
     setTimeout(() => {
       pendingToggles.delete(toggleKey);
     }, 300);
   }
 }
-
-// Expose onTaskClick to window for inline onclick attributes
 window.onTaskClick = onTaskClick;
 
 export function renderBoard(data) {
   currentData = data;
-  loadingElem.classList.add('hidden');
-  boardElem.classList.remove('hidden');
+  showView('board');
   updateTvBadge(data);
 
   if (familyTitleElem && data.name) {
     familyTitleElem.innerText = data.name;
+    familyTitleElem.classList.remove('hidden');
   }
 
   if (!data || !data.children || data.children.length === 0) {
     boardElem.innerHTML = `
       <div class="col-span-full text-center py-16 bg-slate-900/60 rounded-3xl border border-slate-800">
         <p class="text-slate-400 text-xl font-bold mb-3">עדיין לא הוגדרו ילדים בלוח</p>
-        <a href="/parent" class="inline-block px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">
+        <a href="/parent.html" class="inline-block px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">
           עבור ללוח ניהול הורים להוספת ילדים
         </a>
       </div>`;
@@ -262,54 +372,110 @@ export function renderBoard(data) {
   }).join('');
 }
 
-window.pairTabletCode = function() {
-  const code = document.getElementById('tablet-pair-code')?.value?.trim();
-  if (code) {
-    setStoredFamilyId(code);
-    window.location.href = `/?family=${encodeURIComponent(code)}`;
-  }
-};
+function loadFamilyBoard(familyId) {
+  currentFamilyId = familyId;
+  setStoredFamilyId(familyId);
 
-// Initialize Realtime Listener
-function init() {
-  renderHebrewDate();
+  if (familyUnsubscribe) familyUnsubscribe();
   updateConnectionStatus(false);
+  showView('loading');
 
-  // Check URL query parameters for instant pairing via QR code or direct link
-  const urlParams = new URLSearchParams(window.location.search);
-  const urlFamily = urlParams.get('family');
-  if (urlFamily) {
-    setStoredFamilyId(urlFamily);
-    currentFamilyId = urlFamily;
-  }
+  familyUnsubscribe = subscribeToFamily(familyId, data => {
+    // STRICT SECURITY GATEKEEPER:
+    // Verify that currentUser is actually an approved member or owner of this family!
+    const currentUid = currentUser ? currentUser.uid : null;
+    const isApproved = data.ownerUid === currentUid || 
+                       (data.admins || []).includes(currentUid) || 
+                       (data.parents || []).includes(currentUid) || 
+                       (data.members || []).some(m => m.uid === currentUid);
 
-  if (!currentFamilyId) {
-    loadingElem.classList.add('hidden');
-    boardElem.classList.remove('hidden');
-    boardElem.innerHTML = `
-      <div class="col-span-full text-center py-16 bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md mx-auto space-y-4 shadow-2xl">
-        <div class="text-5xl">📱</div>
-        <h2 class="text-2xl font-bold text-white">חיבור טאבלט</h2>
-        <p class="text-slate-400 text-sm">הטאבלט עדיין לא מחובר למשפחה. הזן את קוד המשפחה או סרוק את קוד ה-QR מלוח ההורים.</p>
-        <div class="flex gap-2 pt-2">
-          <input id="tablet-pair-code" placeholder="קוד משפחה (fam_...)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white">
-          <button onclick="window.pairTabletCode()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition">חבר</button>
-        </div>
-        <div class="pt-4 border-t border-slate-800">
-          <a href="/parent.html" class="inline-block text-xs text-indigo-400 hover:underline font-semibold">פתח לוח ניהול הורים ליצירת משפחה &larr;</a>
-        </div>
-      </div>
-    `;
-    return;
-  }
+    if (!isApproved) {
+      console.warn(`[Security Gate] Tablet access blocked to family ${familyId} for user ${currentUid}. User is not approved.`);
+      const isPending = (data.pendingMembers || []).some(p => p.uid === currentUid);
+      if (isPending) {
+        if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = familyId;
+        showView('pending');
+        showToast('הגישה ללוח חסומה עד לאישור מנהל המשפחה 🔒', true);
+      } else {
+        showView('no-family');
+        showToast('הגישה למשפחה זו חסומה 🔒. אינך חבר מאושר.', true);
+      }
+      return; // STOP! Never render children or chores
+    }
 
-  // Subscribe to Firestore changes
-  subscribeToFamily(currentFamilyId, data => {
     updateConnectionStatus(true);
     renderBoard(data);
   }, err => {
     updateConnectionStatus(false);
     console.error('[Tablet] Subscription error:', err);
+    showToast('שגיאה בטעינת נתוני המשפחה או שאין הרשאת גישה', true);
+  });
+}
+
+// Initialize Authentication & Realtime Listener
+function init() {
+  renderHebrewDate();
+  updateConnectionStatus(false);
+  showView('loading');
+
+  // Monitor Authentication State
+  subscribeToAuth(user => {
+    currentUser = user;
+
+    if (!user) {
+      if (familyUnsubscribe) familyUnsubscribe();
+      if (userProfileUnsubscribe) userProfileUnsubscribe();
+      if (userProfileBar) userProfileBar.classList.add('hidden');
+      if (familyTitleElem) familyTitleElem.classList.add('hidden');
+      showView('auth');
+      return;
+    }
+
+    // User is authenticated with Google
+    if (userProfileBar) userProfileBar.classList.remove('hidden');
+    if (userAvatar && user.photoURL) {
+      userAvatar.src = user.photoURL;
+      userAvatar.classList.remove('hidden');
+    }
+    if (userDisplayName) {
+      userDisplayName.innerText = user.displayName || user.email || 'משתמש';
+    }
+
+    // Check if URL specifies a family, e.g. ?family=...
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlFamily = urlParams.get('family');
+
+    // Subscribe to user profile in real-time
+    if (userProfileUnsubscribe) userProfileUnsubscribe();
+    userProfileUnsubscribe = subscribeToUserProfile(user.uid, profile => {
+      if (profile && profile.status === 'pending') {
+        // User requested to join and is waiting for admin approval
+        if (pendingFamilyCodeDisplay) {
+          pendingFamilyCodeDisplay.innerText = profile.pendingFamilyId || '';
+        }
+        showView('pending');
+      } else if (profile && profile.status === 'approved' && profile.familyId) {
+        // User is an approved family member! Load family board
+        loadFamilyBoard(profile.familyId);
+      } else if (urlFamily) {
+        // User has no active family, but opened a pairing link with ?family=...
+        showToast('שולח בקשת הצטרפות למשפחה...');
+        requestJoinFamily(user.uid, user, urlFamily).then(res => {
+          if (res.status === 'already_approved') {
+            loadFamilyBoard(urlFamily);
+          } else {
+            if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = urlFamily;
+            showView('pending');
+          }
+        }).catch(err => {
+          showToast(err.message, true);
+          showView('no-family');
+        });
+      } else {
+        // User has no family assigned
+        showView('no-family');
+      }
+    });
   });
 }
 

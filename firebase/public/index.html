@@ -14,16 +14,16 @@
 <body class="bg-slate-950 text-slate-100 min-h-full flex flex-col selection:bg-indigo-500 selection:text-white">
 
   <!-- Header Bar -->
-  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-20 px-4 sm:px-8 py-4 shadow-md">
+  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-20 px-4 sm:px-8 py-3.5 shadow-md">
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
       <div class="flex items-center space-x-3 space-x-reverse">
-        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-2xl shadow-lg shadow-indigo-900/40">
+        <div class="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-xl sm:text-2xl shadow-lg shadow-indigo-900/40">
           ⭐
         </div>
         <div>
-          <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+          <h1 class="text-xl sm:text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
             <span>לוח משימות יומי</span>
-            <span id="family-title" class="text-xs sm:text-sm font-semibold text-indigo-400 bg-indigo-950/60 border border-indigo-800/60 px-2.5 py-0.5 rounded-full"></span>
+            <span id="family-title" class="text-xs sm:text-sm font-semibold text-indigo-400 bg-indigo-950/60 border border-indigo-800/60 px-2.5 py-0.5 rounded-full hidden"></span>
           </h1>
           <p id="current-date" class="text-xs sm:text-sm text-slate-400 font-medium"></p>
         </div>
@@ -41,6 +41,15 @@
           <span>ניהול הורים</span>
         </a>
 
+        <!-- User Profile & Logout (shown when authenticated) -->
+        <div id="user-profile-bar" class="hidden items-center gap-2 bg-slate-800/80 border border-slate-700/80 rounded-xl px-2.5 py-1.5">
+          <img id="user-avatar" class="w-6 h-6 rounded-full object-cover hidden" alt="Avatar">
+          <span id="user-display-name" class="text-xs font-bold text-slate-200 truncate max-w-[90px] sm:max-w-[120px]">משתמש</span>
+          <button onclick="window.triggerLogout()" class="text-slate-400 hover:text-rose-400 text-xs font-bold px-1 transition" title="התנתק מהחשבון">
+            🚪
+          </button>
+        </div>
+
         <div id="status-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">
           <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
           <span id="status-text" class="hidden sm:inline">מתחבר...</span>
@@ -50,21 +59,139 @@
   </header>
 
   <!-- Main Content Area -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-    <!-- Loading State -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 flex flex-col justify-center">
+
+    <!-- 1. AUTH LANDING VIEW (Unauthenticated) -->
+    <div id="auth-landing" class="hidden flex-1 flex flex-col items-center justify-center py-10">
+      <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+        <div class="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-3xl shadow-xl shadow-indigo-900/40">
+          🔒
+        </div>
+        <div>
+          <h2 class="text-2xl font-black text-white">לוח משימות מוגן</h2>
+          <p class="text-slate-400 text-sm mt-1">התחבר באמצעות חשבון Google כדי לצפות בלוח המשימות של המשפחה</p>
+        </div>
+
+        <button 
+          onclick="window.triggerGoogleLogin()"
+          class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-bold px-5 py-3.5 rounded-2xl shadow-xl transition-all duration-200 hover:scale-[1.01] active:scale-[0.98]"
+        >
+          <svg class="w-5 h-5" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span>התחבר באמצעות Google</span>
+        </button>
+
+        <div class="pt-4 border-t border-slate-800 text-xs text-slate-400 space-y-2">
+          <p>התחברות זו מאבטחת את שמות הילדים והמשימות מפני גישה חיצונית.</p>
+          <a href="/parent.html" class="inline-block text-indigo-400 hover:underline font-semibold">לוח ניהול הורים &larr;</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. PENDING APPROVAL VIEW (Access Blocked) -->
+    <div id="view-pending-approval" class="hidden flex-1 flex flex-col items-center justify-center py-10">
+      <div class="max-w-md w-full bg-slate-900 border border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+        <div class="w-16 h-16 mx-auto rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-3xl animate-pulse border border-amber-500/30">
+          🔒
+        </div>
+        <div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-950/80 border border-amber-600/60 text-amber-300 mb-2">
+            <span>⏳</span>
+            <span>ממתין לאישור מנהל המשפחה</span>
+          </div>
+          <h2 class="text-2xl font-black text-white">הגישה ללוח חסומה</h2>
+          <p class="text-slate-400 text-xs mt-1">בקשת ההצטרפות שלך נקלטה וממתינה לאישור מנהל המשפחה</p>
+        </div>
+
+        <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-1">
+          <p class="text-xs text-slate-400 font-bold">משפחה מבוקשת:</p>
+          <p id="pending-family-code-display" class="font-mono text-indigo-300 font-bold text-base"></p>
+        </div>
+
+        <div class="p-3 bg-rose-950/20 border border-rose-800/40 rounded-xl text-xs text-rose-300 text-right space-y-1">
+          <p class="font-bold flex items-center gap-1">
+            <span>🛡️</span>
+            <span>אבטחת מידע משפחתי:</span>
+          </p>
+          <p class="text-slate-300">
+            כל עוד מנהל המשפחה לא אישר את בקשתך, אין באפשרותך לצפות במשימות או לבצע פעולות בלוח.
+          </p>
+        </div>
+
+        <div class="pt-2 space-y-2">
+          <p class="text-[11px] text-slate-500 animate-pulse">
+            ⚡ המסך ייפתח אוטומטית ברגע שהמנהל יאשר אותך בלשונית החברים.
+          </p>
+          <button onclick="window.triggerCancelJoin()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold rounded-xl text-xs border border-slate-700 transition">
+            ביטול בקשת הצטרפות
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. NO FAMILY VIEW (User authenticated, but no family) -->
+    <div id="view-no-family" class="hidden flex-1 flex flex-col items-center justify-center py-10">
+      <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+        <div class="w-16 h-16 mx-auto rounded-3xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-3xl">
+          🏠
+        </div>
+        <div>
+          <h2 class="text-2xl font-black text-white">אין משפחה משויכת</h2>
+          <p class="text-slate-400 text-xs mt-1">החשבון שלך מחובר, אך עדיין אינו משויך לאף לוח משפחתי פעיל</p>
+        </div>
+
+        <div class="space-y-3 text-right">
+          <div class="p-4 bg-slate-800/60 border border-slate-700 rounded-2xl space-y-2">
+            <p class="text-xs font-bold text-slate-300">יש לך קוד משפחה?</p>
+            <div class="flex gap-2">
+              <input 
+                type="text" 
+                id="direct-join-code-input" 
+                placeholder="קוד משפחה (fam_...)" 
+                class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono"
+              >
+              <button 
+                onclick="window.triggerDirectJoin()" 
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition"
+              >
+                הצטרף
+              </button>
+            </div>
+          </div>
+
+          <div class="text-center pt-2">
+            <p class="text-xs text-slate-400 mb-2">רוצה להקים לוח משפחתי חדש?</p>
+            <a 
+              href="/parent.html" 
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-lg transition"
+            >
+              <span>🚀</span>
+              <span>פתח אשף הקמת משפחה בלוח ההורים</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. LOADING STATE -->
     <div id="loading-spinner" class="flex flex-col items-center justify-center py-24 gap-4">
       <div class="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
       <p class="text-slate-400 font-medium animate-pulse text-lg">טוען משימות מהענן...</p>
     </div>
 
-    <!-- Children Cards Grid -->
+    <!-- 5. CHILDREN CARDS GRID (Live Board) -->
     <div id="board" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 items-start">
       <!-- Injected via tablet.js -->
     </div>
+
   </main>
 
   <!-- Tablet Toast Notification -->
-  <div id="tablet-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 bg-slate-800 border border-slate-700 text-white font-bold rounded-2xl shadow-2xl opacity-0 pointer-events-none transition-opacity duration-300 z-50 text-center"></div>
+  <div id="tablet-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 bg-slate-800 border border-slate-700 text-white font-bold rounded-2xl shadow-2xl opacity-0 pointer-events-none transition-opacity duration-300 z-50 text-center text-sm"></div>
 
   <!-- Modular Script -->
   <script type="module" src="/js/tablet.js"></script>
