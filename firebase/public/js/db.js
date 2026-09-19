@@ -906,3 +906,17 @@ export async function updateTabletName(familyId, tabletId, newName) {
   await updateDoc(familyRef, { tablets });
 }
 
+// Admin: Revoke all tablets and reset tablet token (removes all tablets from previous allowed method)
+export async function revokeAllTablets(familyId) {
+  const cleanId = (familyId || '').trim();
+  const familyRef = doc(db, 'families', cleanId);
+  const newToken = generateTabletToken();
+  await updateDoc(familyRef, {
+    tabletToken: newToken,
+    tablets: [],
+    pendingTablets: []
+  });
+  return newToken;
+}
+
+
