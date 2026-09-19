@@ -20,16 +20,6 @@ echo "=================================================================="
 echo "      🚀 Kids Tasker - Proxmox VE LXC Container Setup"
 echo "=================================================================="
 
-# Prompt for GitHub Token if private repo
-if [ -z "$GITHUB_TOKEN" ]; then
-    echo ""
-    echo "🔒 Private Repository Access:"
-    echo "Because this repository is private, a GitHub Personal Access Token (PAT) is required to clone it."
-    echo "(Generate one in 10 seconds at: https://github.com/settings/tokens with 'repo' scope)"
-    read -r -s -p "Enter GitHub Token (input is hidden): " GITHUB_TOKEN
-    echo ""
-fi
-
 # Detect Next Free CT ID
 NEXT_ID=$(pvesh get /cluster/nextid)
 read -r -p "Container ID [default: $NEXT_ID]: " CT_ID
@@ -156,7 +146,7 @@ elif [ -d "$APP_DIR/.git" ]; then
     cd "$APP_DIR"
     git pull || true
 else
-    echo "Cloning Kids Tasker from private GitHub..."
+    echo "Cloning Kids Tasker..."
     if [ -n "$GITHUB_TOKEN" ]; then
         git clone "https://${GITHUB_TOKEN}@github.com/volski/kids-tasker.git" "$APP_DIR"
     else
