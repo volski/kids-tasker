@@ -2000,11 +2000,18 @@ app.get('/', (req, res) => {
       // Mode: 'verify' | 'setup_enter' | 'setup_confirm'
       let pinMode = 'verify';
       let currentPin = '';
-      let firstPin = '';
+      let firstPin = '';   // preserved across resetModal when transitioning to setup_confirm
+      const MIN_PIN = 4;
       const MAX_PIN = 6;
 
-      function renderDots(len, maxLen) {
-        pinDots.innerHTML = Array.from({ length: maxLen || MAX_PIN }, (_, i) =>
+      // Number of dots to display = firstPin.length when in confirm mode, else MAX_PIN
+      function getDotsCount() {
+        return (pinMode === 'setup_confirm' && firstPin.length >= MIN_PIN) ? firstPin.length : MAX_PIN;
+      }
+
+      function renderDots(len) {
+        const total = getDotsCount();
+        pinDots.innerHTML = Array.from({ length: total }, (_, i) =>
           \`<div class="w-4 h-4 rounded-full border-2 transition-all duration-150 \${i < len ? 'bg-indigo-400 border-indigo-400 scale-110' : 'bg-transparent border-slate-600'}"></div>\`
         ).join('');
       }
@@ -2021,20 +2028,24 @@ app.get('/', (req, res) => {
         pinError.textContent = '';
       }
 
-      function resetModal(mode) {
+      // resetModal: preserveFirstPin prevents wiping firstPin when transitioning to setup_confirm
+      function resetModal(mode, preserveFirstPin) {
         pinMode = mode;
         currentPin = '';
-        firstPin = '';
+        if (!preserveFirstPin) firstPin = '';
         clearError();
         if (mode === 'verify') {
           pinTitle.textContent = 'כניסה להורים';
           pinSubtitle.textContent = 'הזן את קוד ה-PIN';
+          cancelBtn.textContent = 'ביטול';
         } else if (mode === 'setup_enter') {
           pinTitle.textContent = '🔐 הגדרת קוד גישה';
           pinSubtitle.textContent = 'בחר קוד PIN חדש (4-6 ספרות)';
+          cancelBtn.textContent = 'ביטול';
         } else if (mode === 'setup_confirm') {
           pinTitle.textContent = '✅ אמת את הקוד';
-          pinSubtitle.textContent = 'הזן שוב את הקוד לאימות';
+          pinSubtitle.textContent = \`הזן שוב את הקוד (\${firstPin.length} ספרות)\`;
+          cancelBtn.textContent = 'התחל מחדש';
         }
         renderDots(0);
       }
@@ -2048,7 +2059,7 @@ app.get('/', (req, res) => {
 
       async function submitPin() {
         if (pinMode === 'verify') {
-          if (currentPin.length < 4) {
+          if (currentPin.length < MIN_PIN) {
             showError('קוד ה-PIN חייב להכיל לפחות 4 ספרות');
             return;
           }
@@ -2072,13 +2083,13 @@ app.get('/', (req, res) => {
             showError('שגיאת תקשורת, נסה שוב');
           }
         } else if (pinMode === 'setup_enter') {
-          if (currentPin.length < 4) { showError('יש להזין לפחות 4 ספרות'); return; }
-          firstPin = currentPin;
-          resetModal('setup_confirm');
+          if (currentPin.length < MIN_PIN) { showError('יש להזין לפחות 4 ספרות'); return; }
+          firstPin = currentPin;                         // save first entry
+          resetModal('setup_confirm', true);             // true = preserve firstPin
         } else if (pinMode === 'setup_confirm') {
           if (currentPin !== firstPin) {
-            showError('הקודים אינם תואמים, התחל מחדש');
-            setTimeout(() => resetModal('setup_enter'), 1200);
+            showError('הקודים אינם תואמים – התחל מחדש');
+            setTimeout(() => resetModal('setup_enter'), 1400);
             return;
           }
           try {
@@ -2102,11 +2113,16 @@ app.get('/', (req, res) => {
       }
 
       function onDigit(d) {
-        if (currentPin.length >= MAX_PIN) return;
+        const limit = (pinMode === 'setup_confirm' && firstPin.length >= MIN_PIN) ? firstPin.length : MAX_PIN;
+        if (currentPin.length >= limit) return;
         currentPin += d;
         clearError();
         renderDots(currentPin.length);
-        if (currentPin.length === MAX_PIN) setTimeout(submitPin, 120);
+        // Auto-submit when we reach the expected length
+        if (currentPin.length === limit && (pinMode === 'verify' || pinMode === 'setup_confirm')) {
+          setTimeout(submitPin, 120);
+        }
+        // In setup_enter auto-submit only at MAX_PIN; shorter PINs need Enter or confirm btn
       }
 
       function onDelete() {
@@ -2115,12 +2131,21 @@ app.get('/', (req, res) => {
         renderDots(currentPin.length);
       }
 
+      // Cancel button: close in verify/setup_enter, restart in setup_confirm
+      cancelBtn.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        if (pinMode === 'setup_confirm') {
+          resetModal('setup_enter');
+        } else {
+          closeModal();
+        }
+      });
+
       // Wire digit buttons
       document.querySelectorAll('.pin-key[data-digit]').forEach(btn => {
         btn.addEventListener('pointerdown', e => { e.preventDefault(); onDigit(btn.dataset.digit); });
       });
       delBtn.addEventListener('pointerdown', e => { e.preventDefault(); onDelete(); });
-      cancelBtn.addEventListener('pointerdown', e => { e.preventDefault(); closeModal(); });
 
       // Physical keyboard support
       document.addEventListener('keydown', e => {
@@ -3733,15 +3758,24 @@ mode: single
         }
       }
 
+      let pinAutoSubmitTimer = null;
       function onDigit(d) {
         if (currentPin.length >= MAX_PIN) return;
         currentPin += d;
         clearErr();
         renderDots(currentPin.length);
-        if (currentPin.length === MAX_PIN) setTimeout(submitParentPin, 120);
+        // Clear any pending timer
+        if (pinAutoSubmitTimer) clearTimeout(pinAutoSubmitTimer);
+        // At MAX_PIN: immediate submit. At 4-5 digits: submit after 600ms if user stops typing
+        if (currentPin.length === MAX_PIN) {
+          pinAutoSubmitTimer = setTimeout(submitParentPin, 120);
+        } else if (currentPin.length >= 4) {
+          pinAutoSubmitTimer = setTimeout(submitParentPin, 600);
+        }
       }
 
       function onDelete() {
+        if (pinAutoSubmitTimer) { clearTimeout(pinAutoSubmitTimer); pinAutoSubmitTimer = null; }
         currentPin = currentPin.slice(0, -1);
         clearErr();
         renderDots(currentPin.length);
