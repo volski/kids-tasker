@@ -22,8 +22,14 @@ import {
   calculateCompletionStatus, 
   getTodayDateString, 
   getUserProfile, 
+  subscribeToUserProfile,
   createFamilyForUser, 
-  joinFamilyWithCode, 
+  requestJoinFamily,
+  cancelJoinRequest,
+  approveMember,
+  rejectMember,
+  updateMemberRole,
+  removeMember,
   ICON_LABELS 
 } from './db.js';
 
@@ -32,11 +38,14 @@ let currentData = null;
 let currentTab = 'status';
 let currentUser = null;
 let familyUnsubscribe = null;
+let userProfileUnsubscribe = null;
 
 // DOM View Containers
 const authLanding = document.getElementById('auth-landing');
 const onboardingWizard = document.getElementById('onboarding-wizard');
+const viewPendingApproval = document.getElementById('view-pending-approval');
 const appDashboard = document.getElementById('app-dashboard');
+const pendingFamilyCodeDisplay = document.getElementById('pending-family-code-display');
 
 // Header elements
 const statusBadge = document.getElementById('status-badge');
@@ -95,6 +104,7 @@ window.triggerGoogleLogin = triggerGoogleLogin;
 export async function triggerLogout() {
   if (!confirm('האם אתה בטוח שברצונך להתנתק?')) return;
   if (familyUnsubscribe) familyUnsubscribe();
+  if (userProfileUnsubscribe) userProfileUnsubscribe();
   await logoutUser();
   currentUser = null;
   currentFamilyId = null;
@@ -113,33 +123,53 @@ export async function triggerJoinFamily() {
   }
 
   if (!currentUser) {
-    showToast('יש להתחבר עם Google קודם כדי להצטרף למשפחה');
+    showToast('יש להתחבר עם Google תחילה כדי להצטרף למשפחה');
     await triggerGoogleLogin();
     if (!currentUser) return;
   }
 
   try {
-    showToast('מצטרף למשפחה...');
-    await joinFamilyWithCode(currentUser.uid, currentUser, code);
-    currentFamilyId = code;
-    setStoredFamilyId(code);
-    showToast('הצטרפת בהצלחה למשפחה! 🎉');
-    loadDashboardForFamily(code);
+    showToast('שולח בקשת הצטרפות למנהל המשפחה...');
+    const result = await requestJoinFamily(currentUser.uid, currentUser, code);
+    if (result.status === 'already_approved') {
+      showToast('הנך כבר חבר מאושר במשפחה זו! 🎉');
+      loadDashboardForFamily(code);
+    } else {
+      showToast('בקשת ההצטרפות נשלחה וממתינה לאישור מנהל המשפחה ⏳');
+      if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = code;
+      showView('pending');
+    }
   } catch (e) {
     showToast(e.message, true);
   }
 }
 window.triggerJoinFamily = triggerJoinFamily;
 
+export async function triggerCancelJoin() {
+  if (!currentUser) return;
+  const code = pendingFamilyCodeDisplay?.innerText || '';
+  try {
+    await cancelJoinRequest(currentUser.uid, code);
+    showToast('בקשת ההצטרפות בוטלה');
+    showView('onboarding');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+window.triggerCancelJoin = triggerCancelJoin;
+
 function showView(viewName) {
   authLanding.classList.add('hidden');
   onboardingWizard.classList.add('hidden');
+  if (viewPendingApproval) viewPendingApproval.classList.add('hidden');
   appDashboard.classList.add('hidden');
 
   if (viewName === 'auth') {
     authLanding.classList.remove('hidden');
   } else if (viewName === 'onboarding') {
     onboardingWizard.classList.remove('hidden');
+  } else if (viewName === 'pending') {
+    if (viewPendingApproval) viewPendingApproval.classList.remove('hidden');
   } else if (viewName === 'dashboard') {
     appDashboard.classList.remove('hidden');
   }
@@ -218,7 +248,6 @@ window.wizardSubmitFamily = async function() {
     document.getElementById('dot-step-2').className = 'w-3 h-3 rounded-full bg-emerald-500';
     document.getElementById('dot-step-3').className = 'w-3 h-3 rounded-full bg-emerald-500';
 
-    // Populate Success Screen
     document.getElementById('wizard-result-family-id').innerText = familyId;
     const tabletUrl = `${window.location.origin}/index.html?family=${familyId}`;
     const qrImg = document.getElementById('wizard-qr-img');
@@ -480,6 +509,177 @@ function renderHassTab(data) {
   }
 }
 
+// Render Tab 5: Family Members & Approvals
+function renderFamilyTab(data) {
+  const currentUid = currentUser ? currentUser.uid : null;
+  const isOwner = data.ownerUid === currentUid;
+  const isAdmin = isOwner || (data.admins || []).includes(currentUid);
+
+  const pendingList = data.pendingMembers || [];
+  const membersList = data.members || [];
+
+  // Update Pending Count Badge
+  const countBadge = document.getElementById('pending-count-badge');
+  if (countBadge) {
+    if (pendingList.length > 0) {
+      countBadge.innerText = `${pendingList.length} ממתינים`;
+      countBadge.classList.remove('hidden');
+    } else {
+      countBadge.classList.add('hidden');
+    }
+  }
+
+  // 1. Pending Members Section
+  const pendingContainer = document.getElementById('pending-members-list');
+  if (pendingContainer) {
+    if (pendingList.length === 0) {
+      pendingContainer.innerHTML = '<p class="text-slate-500 text-sm py-2">אין בקשות הצטרפות ממתינות כרגע ✨</p>';
+    } else {
+      pendingContainer.innerHTML = pendingList.map(p => `
+        <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-800/60 border border-slate-700/80 rounded-2xl">
+          <div class="flex items-center gap-3">
+            <img src="${p.photoURL || '/icons/star.svg'}" class="w-10 h-10 rounded-full object-cover border border-indigo-500/30" onerror="this.src='/icons/star.svg'">
+            <div>
+              <div class="font-bold text-white text-sm flex items-center gap-1.5">
+                <span>${p.displayName || 'משתמש חדש'}</span>
+                <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">ממתין לאישור</span>
+              </div>
+              <div class="text-xs text-slate-400 font-mono">${p.email || ''}</div>
+            </div>
+          </div>
+
+          ${isAdmin ? `
+            <div class="flex items-center gap-2">
+              <button onclick="window.handleApproveMember('${p.uid}', 'parent')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-1">
+                <span>✔</span>
+                <span>אשר כהורה</span>
+              </button>
+              <button onclick="window.handleApproveMember('${p.uid}', 'admin')" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-1">
+                <span>👑</span>
+                <span>אשר כמנהל</span>
+              </button>
+              <button onclick="window.handleRejectMember('${p.uid}')" class="px-2.5 py-1.5 bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-200 border border-slate-700 rounded-xl text-xs font-bold transition">
+                דחה ✖
+              </button>
+            </div>
+          ` : `
+            <span class="text-xs text-slate-500 italic">ממתין לאישור מנהל המשפחה</span>
+          `}
+        </div>
+      `).join('');
+    }
+  }
+
+  // 2. Active Members Section
+  const membersContainer = document.getElementById('active-members-list');
+  if (membersContainer) {
+    if (membersList.length === 0) {
+      membersContainer.innerHTML = '<p class="text-slate-500 text-sm py-2">אין חברים רשומים</p>';
+    } else {
+      membersContainer.innerHTML = membersList.map(m => {
+        const isMemberOwner = data.ownerUid === m.uid;
+        const isMemberAdmin = isMemberOwner || (data.admins || []).includes(m.uid);
+        const isSelf = m.uid === currentUid;
+
+        let roleBadge = '<span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700">הורה</span>';
+        if (isMemberOwner) {
+          roleBadge = '<span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-950 text-purple-300 border border-purple-700 flex items-center gap-1"><span>👑</span><span>מנהל ראשי</span></span>';
+        } else if (isMemberAdmin) {
+          roleBadge = '<span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-950 text-indigo-300 border border-indigo-700 flex items-center gap-1"><span>⭐</span><span>מנהל</span></span>';
+        }
+
+        return `
+          <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-800/40 border border-slate-800 rounded-2xl hover:border-slate-700 transition">
+            <div class="flex items-center gap-3">
+              <img src="${m.photoURL || '/icons/star.svg'}" class="w-10 h-10 rounded-full object-cover border border-slate-700" onerror="this.src='/icons/star.svg'">
+              <div>
+                <div class="font-bold text-white text-sm flex items-center gap-2">
+                  <span>${m.displayName || 'משתמש'}</span>
+                  ${isSelf ? '<span class="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium">(אתה)</span>' : ''}
+                </div>
+                <div class="text-xs text-slate-400 font-mono">${m.email || ''}</div>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2.5">
+              ${roleBadge}
+
+              ${isAdmin && !isMemberOwner && !isSelf ? `
+                <button 
+                  onclick="window.handleToggleMemberRole('${m.uid}', '${isMemberAdmin ? 'parent' : 'admin'}')" 
+                  class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold border border-slate-700 transition"
+                  title="${isMemberAdmin ? 'הורד לדרגת הורה' : 'קדם לדרגת מנהל'}"
+                >
+                  ${isMemberAdmin ? 'בטל מנהל' : 'הפוך למנהל'}
+                </button>
+                <button 
+                  onclick="window.handleRemoveMember('${m.uid}', '${m.displayName || m.email || 'משתמש'}')" 
+                  class="px-2.5 py-1 bg-rose-950/50 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded-xl text-xs font-semibold transition"
+                  title="הסר מהמשפחה"
+                >
+                  הסר
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // 3. Family Code badge
+  const codeBadge = document.getElementById('family-code-badge');
+  if (codeBadge) codeBadge.innerText = data.id || currentFamilyId;
+}
+
+window.copyFamilyCode = function() {
+  const code = document.getElementById('family-code-badge')?.innerText;
+  if (code) {
+    navigator.clipboard.writeText(code);
+    showToast('קוד המשפחה הועתק בהצלחה!');
+  }
+};
+
+// Admin Action Handlers
+window.handleApproveMember = async function(targetUid, role) {
+  try {
+    showToast('מאשר חבר משפחה...');
+    await approveMember(currentFamilyId, targetUid, role);
+    showToast(role === 'admin' ? 'החבר אושר כמנהל! 👑' : 'החבר אושר כהורה! ✔');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
+window.handleRejectMember = async function(targetUid) {
+  if (!confirm('האם לדחות את בקשת ההצטרפות?')) return;
+  try {
+    await rejectMember(currentFamilyId, targetUid);
+    showToast('בקשת ההצטרפות נדחתה');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
+window.handleToggleMemberRole = async function(targetUid, newRole) {
+  try {
+    await updateMemberRole(currentFamilyId, targetUid, newRole);
+    showToast(`הרשאת החבר עודכנה ל-${newRole === 'admin' ? 'מנהל' : 'הורה'}`);
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
+window.handleRemoveMember = async function(targetUid, name) {
+  if (!confirm(`האם אתה בטוח שברצונך להסיר את "${name}" מהמשפחה?`)) return;
+  try {
+    await removeMember(currentFamilyId, targetUid);
+    showToast('החבר הוסר מהמשפחה');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
 let historyUnsubscribe = null;
 function loadHistory(dateString) {
   if (historyUnsubscribe) historyUnsubscribe();
@@ -662,8 +862,6 @@ function loadDashboardForFamily(familyId) {
   showView('dashboard');
 
   if (familyIdDisplay) familyIdDisplay.innerText = familyId;
-  const codeBadge = document.getElementById('family-code-badge');
-  if (codeBadge) codeBadge.innerText = familyId;
 
   const dateSelect = document.getElementById('history-date-select');
   if (dateSelect) {
@@ -683,6 +881,7 @@ function loadDashboardForFamily(familyId) {
     renderStatusTab(data);
     renderManageTab(data);
     renderHassTab(data);
+    renderFamilyTab(data);
   }, err => {
     updateConnectionStatus(false);
     console.error('[Parent] Subscription error:', err);
@@ -697,11 +896,12 @@ function init() {
   updateConnectionStatus(false);
 
   // Monitor Authentication State
-  subscribeToAuth(async user => {
+  subscribeToAuth(user => {
     currentUser = user;
 
     if (!user) {
-      // User is logged out
+      if (familyUnsubscribe) familyUnsubscribe();
+      if (userProfileUnsubscribe) userProfileUnsubscribe();
       showView('auth');
       return;
     }
@@ -715,20 +915,28 @@ function init() {
       userDisplayName.innerText = user.displayName || user.email || 'הורה';
     }
 
-    // Check user profile in Firestore
-    const profile = await getUserProfile(user.uid);
-    if (profile && profile.familyId) {
-      // User has existing family
-      loadDashboardForFamily(profile.familyId);
-    } else {
-      // New user -> Trigger Onboarding Wizard
-      showView('onboarding');
-      const nameInput = document.getElementById('wizard-family-name');
-      if (nameInput && user.displayName) {
-        const firstName = user.displayName.split(' ')[0];
-        nameInput.value = `משפחת ${firstName}`;
+    // Real-time listener on user profile
+    if (userProfileUnsubscribe) userProfileUnsubscribe();
+    userProfileUnsubscribe = subscribeToUserProfile(user.uid, profile => {
+      if (profile && profile.status === 'pending') {
+        // User requested to join and is waiting for admin approval
+        if (pendingFamilyCodeDisplay) {
+          pendingFamilyCodeDisplay.innerText = profile.pendingFamilyId || '';
+        }
+        showView('pending');
+      } else if (profile && profile.status === 'approved' && profile.familyId) {
+        // User is an approved family member/admin!
+        loadDashboardForFamily(profile.familyId);
+      } else {
+        // New user without a family yet -> Onboarding
+        showView('onboarding');
+        const nameInput = document.getElementById('wizard-family-name');
+        if (nameInput && user.displayName) {
+          const firstName = user.displayName.split(' ')[0];
+          nameInput.value = `משפחת ${firstName}`;
+        }
       }
-    }
+    });
   });
 }
 
