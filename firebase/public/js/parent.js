@@ -32,6 +32,8 @@ import {
   removeMember,
   updateFamilyName,
   claimFamilyIfUnowned,
+  getOrCreateTabletToken,
+  regenerateTabletToken,
   ICON_LABELS 
 } from './db.js';
 
@@ -287,7 +289,8 @@ window.wizardSubmitFamily = async function() {
     document.getElementById('dot-step-3').className = 'w-3 h-3 rounded-full bg-emerald-500';
 
     document.getElementById('wizard-result-family-id').innerText = familyId;
-    const tabletUrl = `${window.location.origin}/index.html?family=${familyId}`;
+    const token = await getOrCreateTabletToken(familyId);
+    const tabletUrl = `${window.location.origin}/index.html?family=${encodeURIComponent(familyId)}&token=${encodeURIComponent(token)}`;
     const qrImg = document.getElementById('wizard-qr-img');
     if (qrImg) {
       qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(tabletUrl)}`;
@@ -307,10 +310,15 @@ window.copyFamilyId = function() {
   }
 };
 
-window.copyTabletUrl = function() {
-  const tabletUrl = `${window.location.origin}/index.html?family=${currentFamilyId}`;
-  navigator.clipboard.writeText(tabletUrl);
-  showToast('הקישור לטאבלט הועתק! שלח אותו או פתח בטאבלט.');
+window.copyTabletUrl = async function() {
+  try {
+    const token = await getOrCreateTabletToken(currentFamilyId);
+    const tabletUrl = `${window.location.origin}/index.html?family=${encodeURIComponent(currentFamilyId)}&token=${encodeURIComponent(token)}`;
+    navigator.clipboard.writeText(tabletUrl);
+    showToast('הקישור המאובטח לטאבלט הועתק! שלח אותו או פתח בטאבלט.');
+  } catch (e) {
+    showToast(e.message, true);
+  }
 };
 
 window.finishOnboarding = function() {
@@ -321,15 +329,21 @@ window.finishOnboarding = function() {
 // Tablet Pairing Modal
 // ==========================================
 
-window.openPairModal = function() {
+window.openPairModal = async function() {
   const modal = document.getElementById('modal-pair-tablet');
   const urlInput = document.getElementById('pair-tablet-url');
   const qrImg = document.getElementById('pair-qr-img');
-  const tabletUrl = `${window.location.origin}/index.html?family=${currentFamilyId}`;
 
-  if (urlInput) urlInput.value = tabletUrl;
-  if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(tabletUrl)}`;
-  if (modal) modal.classList.remove('hidden');
+  try {
+    const token = await getOrCreateTabletToken(currentFamilyId);
+    const tabletUrl = `${window.location.origin}/index.html?family=${encodeURIComponent(currentFamilyId)}&token=${encodeURIComponent(token)}`;
+
+    if (urlInput) urlInput.value = tabletUrl;
+    if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(tabletUrl)}`;
+    if (modal) modal.classList.remove('hidden');
+  } catch (e) {
+    showToast(e.message, true);
+  }
 };
 
 window.closePairModal = function() {
@@ -342,6 +356,22 @@ window.copyPairTabletUrl = function() {
   if (urlInput) {
     navigator.clipboard.writeText(urlInput.value);
     showToast('הקישור לטאבלט הועתק בהצלחה!');
+  }
+};
+
+window.handleRegenerateTabletToken = async function() {
+  if (!confirm('האם ליצור טוקן חדש? שים לב: טאבלטים שכבר חוברו בעבר יידרשו לסרוק מחדש את קוד ה-QR.')) return;
+  try {
+    showToast('מייצר טוקן מאובטח חדש...');
+    const token = await regenerateTabletToken(currentFamilyId);
+    const tabletUrl = `${window.location.origin}/index.html?family=${encodeURIComponent(currentFamilyId)}&token=${encodeURIComponent(token)}`;
+    const urlInput = document.getElementById('pair-tablet-url');
+    const qrImg = document.getElementById('pair-qr-img');
+    if (urlInput) urlInput.value = tabletUrl;
+    if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(tabletUrl)}`;
+    showToast('טוקן טאבלט חדש נוצר בהצלחה! 📱');
+  } catch (e) {
+    showToast(e.message, true);
   }
 };
 

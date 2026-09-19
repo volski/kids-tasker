@@ -60,10 +60,21 @@ export function guessIconFromTitle(title) {
   return 'star';
 }
 
+// Generate secure random tablet token (long-lived pairing token)
+export function generateTabletToken() {
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let token = 'tt_';
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
 // Default initial data template for new families
 export function getDefaultFamilyData(familyName = 'משפחתנו') {
   return {
     name: familyName,
+    tabletToken: generateTabletToken(),
     createdAt: new Date().toISOString(),
     lastActiveDate: getTodayDateString(),
     children: [
@@ -447,6 +458,7 @@ export async function createFamilyForUser(uid, userMeta, familyName, childrenNam
       }
     ],
     pendingMembers: [],
+    tabletToken: generateTabletToken(),
     createdAt: new Date().toISOString(),
     lastActiveDate: getTodayDateString(),
     children: validChildren,
@@ -504,7 +516,8 @@ export async function claimFamilyIfUnowned(familyId, user) {
         ownerUid: user.uid,
         admins: [user.uid],
         parents: [user.uid],
-        members: [adminMember]
+        members: [adminMember],
+        tabletToken: data.tabletToken || generateTabletToken()
       });
       // Update user profile to approved admin
       const userRef = doc(db, 'users', user.uid);
@@ -524,6 +537,32 @@ export async function claimFamilyIfUnowned(familyId, user) {
     console.warn('[ClaimFamily] Notice:', e.message);
   }
   return false;
+}
+
+// Get or create a long-lived tablet pairing token for a family
+export async function getOrCreateTabletToken(familyId) {
+  const cleanId = (familyId || '').trim();
+  const familyRef = doc(db, 'families', cleanId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('משפחה לא נמצאה');
+
+  const data = snap.data();
+  if (data.tabletToken) {
+    return data.tabletToken;
+  }
+
+  const newToken = generateTabletToken();
+  await updateDoc(familyRef, { tabletToken: newToken });
+  return newToken;
+}
+
+// Regenerate tablet token (revokes previous tablet pairings)
+export async function regenerateTabletToken(familyId) {
+  const cleanId = (familyId || '').trim();
+  const familyRef = doc(db, 'families', cleanId);
+  const newToken = generateTabletToken();
+  await updateDoc(familyRef, { tabletToken: newToken });
+  return newToken;
 }
 
 // Real-time listener for user profile

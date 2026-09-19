@@ -665,11 +665,23 @@
       </div>
       <div>
         <h3 class="text-xl font-black text-white">חיבור טאבלט לוח משימות</h3>
-        <p class="text-slate-400 text-xs mt-1">סרוק את הקוד באמצעות מצלמת הטאבלט כדי לחבר אותו מיד ללא סיסמה</p>
+        <p class="text-slate-400 text-xs mt-1">
+          קוד זה כולל טוקן מאובטח ייעודי (Bypass Token) המאפשר לטאבלט לצפות במשימות ילדים בלבד ללא צורך בהתחברות ל-Google.
+        </p>
       </div>
 
       <div class="bg-white p-3 rounded-2xl inline-block shadow-lg">
         <img id="pair-qr-img" class="w-44 h-44" alt="QR Code">
+      </div>
+
+      <div class="p-2.5 bg-indigo-950/40 border border-indigo-800/50 rounded-xl text-[11px] text-indigo-200 text-right space-y-1">
+        <p class="font-bold flex items-center gap-1">
+          <span>🔒</span>
+          <span>הרשאת "מצב ילדים" בלבד:</span>
+        </p>
+        <p class="text-slate-300">
+          הטאבלט יוכל אך ורק לצפות במשימות ולסמן ביצוע. הגישה לניהול הורים ולהגדרות נשארת חסומה ומחייבת כניסת מנהל.
+        </p>
       </div>
 
       <div class="text-right space-y-1.5">
@@ -678,6 +690,16 @@
           <input id="pair-tablet-url" readonly class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono truncate">
           <button onclick="window.copyPairTabletUrl()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs">העתק</button>
         </div>
+      </div>
+
+      <div class="pt-2 border-t border-slate-800">
+        <button 
+          onclick="window.handleRegenerateTabletToken()" 
+          class="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition flex items-center gap-1.5 justify-center mx-auto"
+        >
+          <span>🔄</span>
+          <span>צור טוקן חדש (מבטל חיבור טאבלטים קודמים)</span>
+        </button>
       </div>
     </div>
   </div>
