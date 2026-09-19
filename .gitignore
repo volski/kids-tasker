@@ -12,3 +12,10 @@ tasks.test.json
 *.log
 .DS_Store
 Thumbs.db
+
+# Firebase build & debug artifacts
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+firebase/functions/node_modules/

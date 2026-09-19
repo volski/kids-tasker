@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#10B981" fill-opacity="0.2"/>
+  <!-- Open Book Left Page -->
+  <path d="M32 46C26 42 16 42 12 44V22C16 20 26 20 32 24V46Z" fill="#F8FAFC" stroke="#059669" stroke-width="2"/>
+  <!-- Open Book Right Page -->
+  <path d="M32 46C38 42 48 42 52 44V22C48 20 38 20 32 24V46Z" fill="#F8FAFC" stroke="#059669" stroke-width="2"/>
+  <!-- Book Cover Spine bottom -->
+  <path d="M12 44C16 42 26 42 32 46C38 42 48 42 52 44" stroke="#047857" stroke-width="3" stroke-linecap="round"/>
+  <!-- Text lines on left -->
+  <line x1="16" y1="28" x2="28" y2="29" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="16" y1="33" x2="28" y2="34" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="16" y1="38" x2="25" y2="39" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Text lines on right -->
+  <line x1="36" y1="29" x2="48" y2="28" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="36" y1="34" x2="48" y2="33" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="36" y1="39" x2="45" y2="38" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
