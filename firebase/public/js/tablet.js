@@ -262,10 +262,46 @@ export function renderBoard(data) {
   }).join('');
 }
 
+window.pairTabletCode = function() {
+  const code = document.getElementById('tablet-pair-code')?.value?.trim();
+  if (code) {
+    setStoredFamilyId(code);
+    window.location.href = `/?family=${encodeURIComponent(code)}`;
+  }
+};
+
 // Initialize Realtime Listener
 function init() {
   renderHebrewDate();
   updateConnectionStatus(false);
+
+  // Check URL query parameters for instant pairing via QR code or direct link
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlFamily = urlParams.get('family');
+  if (urlFamily) {
+    setStoredFamilyId(urlFamily);
+    currentFamilyId = urlFamily;
+  }
+
+  if (!currentFamilyId) {
+    loadingElem.classList.add('hidden');
+    boardElem.classList.remove('hidden');
+    boardElem.innerHTML = `
+      <div class="col-span-full text-center py-16 bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md mx-auto space-y-4 shadow-2xl">
+        <div class="text-5xl">📱</div>
+        <h2 class="text-2xl font-bold text-white">חיבור טאבלט</h2>
+        <p class="text-slate-400 text-sm">הטאבלט עדיין לא מחובר למשפחה. הזן את קוד המשפחה או סרוק את קוד ה-QR מלוח ההורים.</p>
+        <div class="flex gap-2 pt-2">
+          <input id="tablet-pair-code" placeholder="קוד משפחה (fam_...)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white">
+          <button onclick="window.pairTabletCode()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition">חבר</button>
+        </div>
+        <div class="pt-4 border-t border-slate-800">
+          <a href="/parent.html" class="inline-block text-xs text-indigo-400 hover:underline font-semibold">פתח לוח ניהול הורים ליצירת משפחה &larr;</a>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   // Subscribe to Firestore changes
   subscribeToFamily(currentFamilyId, data => {
@@ -275,6 +311,8 @@ function init() {
     updateConnectionStatus(false);
     console.error('[Tablet] Subscription error:', err);
   });
+}
+
 // Run init immediately if DOM is already ready (top-level await support)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
