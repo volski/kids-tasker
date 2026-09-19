@@ -20,6 +20,16 @@ echo "=================================================================="
 echo "      🚀 Kids Tasker - Proxmox VE LXC Container Setup"
 echo "=================================================================="
 
+# Prompt for GitHub Token if private repo
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo ""
+    echo "🔒 Private Repository Access:"
+    echo "Because this repository is private, a GitHub Personal Access Token (PAT) is required to clone it."
+    echo "(Generate one in 10 seconds at: https://github.com/settings/tokens with 'repo' scope)"
+    read -r -s -p "Enter GitHub Token (input is hidden): " GITHUB_TOKEN
+    echo ""
+fi
+
 # Detect Next Free CT ID
 NEXT_ID=$(pvesh get /cluster/nextid)
 read -r -p "Container ID [default: $NEXT_ID]: " CT_ID
@@ -102,8 +112,74 @@ echo "Container IP: $CT_IP"
 
 echo ""
 echo "=== [3/4] Installing Node.js & Kids Tasker inside container ==="
-# Download & execute setup script inside the container
-pct exec "$CT_ID" -- bash -c "curl -fsSL https://raw.githubusercontent.com/volski/kids-tasker/main/proxmox/setup-service.sh | bash"
+pct exec "$CT_ID" -- env GITHUB_TOKEN="$GITHUB_TOKEN" bash -c '
+set -e
+echo "Updating packages..."
+apt-get update -y >/dev/null 2>&1
+apt-get install -y curl git ca-certificates gnupg >/dev/null 2>&1
+
+if ! command -v node >/dev/null 2>&1 || [ "$(node -v | cut -d'.' -f1 | tr -d 'v')" -lt 20 ]; then
+    echo "Installing Node.js 20 LTS..."
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg --yes >/dev/null 2>&1
+    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list >/dev/null 2>&1
+    apt-get update -y >/dev/null 2>&1
+    apt-get install -y nodejs >/dev/null 2>&1
+fi
+
+echo "Node.js $(node -v) installed."
+
+APP_DIR="/opt/kids-tasker"
+DATA_DIR="/opt/kids-tasker/data"
+
+if [ -f "$APP_DIR/server.js" ]; then
+    echo "Files found in $APP_DIR. Skipping clone..."
+    cd "$APP_DIR"
+elif [ -d "$APP_DIR/.git" ]; then
+    cd "$APP_DIR"
+    git pull || true
+else
+    echo "Cloning Kids Tasker from private GitHub..."
+    if [ -n "$GITHUB_TOKEN" ]; then
+        git clone "https://${GITHUB_TOKEN}@github.com/volski/kids-tasker.git" "$APP_DIR"
+    else
+        git clone https://github.com/volski/kids-tasker.git "$APP_DIR"
+    fi
+    cd "$APP_DIR"
+fi
+
+mkdir -p "$DATA_DIR"
+
+echo "Installing production npm packages..."
+npm ci --omit=dev >/dev/null 2>&1
+
+echo "Setting up systemd service..."
+cat << "EOF_SVC" > /etc/systemd/system/kids-tasker.service
+[Unit]
+Description=Kids Tasker Standalone Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/kids-tasker
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=TASKS_FILE=/opt/kids-tasker/data/tasks.json
+ExecStart=/usr/bin/node /opt/kids-tasker/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF_SVC
+
+systemctl daemon-reload
+systemctl enable kids-tasker.service >/dev/null 2>&1
+systemctl restart kids-tasker.service
+'
+
+sleep 2
 
 echo ""
 echo "=================================================================="

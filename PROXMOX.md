@@ -12,49 +12,64 @@
 
 ---
 
+## 🔒 התמודדות עם מאגר פרטי ב-GitHub (Private Repo)
+
+מכיוון שהמאגר הוא פרטי (**Private**), יש 2 דרכים קלות מאוד להתקין:
+
+1. **התקנה ישירה מהמחשב שלך (ללא צורך בטוקן כלל! 🚀)** – הקבצים נארזים ישירות מהמחשב ומועברים ל-Proxmox באמצעות SSH/SCP.
+2. **התקנה דרך ה-Shell של Proxmox עם GitHub Token (PAT)** – הזנת טוקן אישי עם הרשאת `repo`.
+
+---
+
 ## 🛠️ אפשרויות התקנה ב-Proxmox
 
-בחר באחת מ-3 השיטות הנוחות לך:
+### אפשרות א': התקנה ישירה מהמחשב שלך ב-PowerShell (הכי פשוטה – ללא טוקן! ⭐)
 
----
+במחשב שלך שבו הפרויקט כבר פתוח ומשובט:
+1. פתח חלון **PowerShell** בתיקיית הפרויקט.
+2. הרץ את הפקודה (החלף את כתובת ה-IP בכתובת שרת ה-Proxmox שלך):
 
-### שיטה 1: התקנה אוטומטית מלאה מתוך ה-Shell של Proxmox (מומלץ ביותר ⭐)
-
-סקריפט זה יוצר מיכל **LXC (Debian 12)** ייעודי, מתקין Node.js 20, מגדיר שירות מערכת (systemd) ומפעיל את האפליקציה תוך כדקה אחת!
-
-1. פתח את ממשק הניהול של **Proxmox VE** בדפדפן.
-2. בחר בשרת הראשי (Node) בצד שמאל ולחץ על **Shell** (מסך הטרמינל השחור).
-3. הדבק את הפקודה הבאה ולחץ **Enter**:
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/volski/kids-tasker/main/proxmox/create-lxc.sh)"
+```powershell
+.\proxmox\deploy-from-pc.ps1 -ProxmoxHost 192.168.1.100
 ```
 
-4. הסקריפט יציג לך ברירות מחדל (ניתן פשוט ללחוץ **Enter** על כל שאלה):
-   - **ID**: המספר הפנוי הבא (למשל `150`)
-   - **Hostname**: `kids-tasker`
-   - **Disk**: `4G`
-   - **RAM**: `512MB`
-   - **Network**: `DHCP` על `vmbr0`
-5. בסיום תקבל כתובת גישה:
-   - 📱 **לוח משימות לטאבלט:** `http://<IP>:3000`
-   - 👑 **לוח ניהול הורים:** `http://<IP>:3000/parent`
+הסקריפט יארוז את קובצי האפליקציה המקומית, יעלה אותם ישירות ל-Proxmox, יקים את מיכל ה-LXC ויפעיל את השירות תוך שניות!
 
 ---
 
-### שיטה 2: התקנה בתוך מיכל LXC או VM קיים (Debian / Ubuntu)
+### אפשרות ב': התקנה דרך ה-Shell של Proxmox באמצעות GitHub Token
 
-אם כבר יש לך קונטיינר LXC או מכונה וירטואלית קיימת:
+אם ברצונך שה-Proxmox ימשוך את המאגר ישירות מ-GitHub:
+1. צור **Personal Access Token (PAT)** ב-GitHub:
+   - היכנס ל: [https://github.com/settings/tokens](https://github.com/settings/tokens)
+   - בחר **Generate new token (classic)**.
+   - סמן את תיבת **`repo`** ולחץ על **Generate token**.
+   - העתק את הטוקן (מתחיל ב-`ghp_`).
 
-1. היכנס לטרמינל של המיכל:
+2. פתח את ה-**Shell** ב-Proxmox והרץ את הפקודה הבאה:
+
+```bash
+read -s -p "Enter GitHub Token: " GITHUB_TOKEN && echo "" && \
+curl -H "Authorization: token $GITHUB_TOKEN" -fsSL https://raw.githubusercontent.com/volski/kids-tasker/main/proxmox/create-lxc.sh | env GITHUB_TOKEN="$GITHUB_TOKEN" bash
+```
+
+הסקריפט יבקש ממך להדביק את הטוקן בצורה מוסתרת, יוריד את הסקריפט, יקים מיכל LXC Debian 12, ישבט את המאגר הפרטי ויפעיל את השירות!
+
+---
+
+### אפשרות ג': התקנה בתוך מיכל LXC או VM קיים (Debian / Ubuntu)
+
+אם כבר יש לך קונטיינר LXC קיים:
+
+1. היכנס לטרמינל שלו:
 ```bash
 pct enter <CT_ID>
 ```
-*(או באמצעות SSH לתוך ה-VM/LXC).*
 
-2. הרץ את סקריפט ההתקנה:
+2. הרץ עם הטוקן שלך:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/volski/kids-tasker/main/proxmox/setup-service.sh | bash
+read -s -p "Enter GitHub Token: " GITHUB_TOKEN && echo "" && \
+curl -H "Authorization: token $GITHUB_TOKEN" -fsSL https://raw.githubusercontent.com/volski/kids-tasker/main/proxmox/setup-service.sh | env GITHUB_TOKEN="$GITHUB_TOKEN" bash
 ```
 
 הסקריפט יתקין את Node.js 20, ישבט את הקוד ל-`/opt/kids-tasker`, יגדיר שירות systemd ויפעיל אותו אוטומטית בעליית המערכת.
