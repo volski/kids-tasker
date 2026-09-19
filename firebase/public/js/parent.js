@@ -114,42 +114,78 @@ export async function triggerLogout() {
 }
 window.triggerLogout = triggerLogout;
 
-export async function triggerJoinFamily() {
-  const input = document.getElementById('join-family-code-input');
-  const code = input?.value?.trim();
-  if (!code) {
+export async function triggerJoinFamilyWithCode(code) {
+  const cleanCode = (code || '').trim();
+  if (!cleanCode) {
     showToast('נא להזין קוד משפחה', true);
     return;
   }
 
   if (!currentUser) {
     showToast('יש להתחבר עם Google תחילה כדי להצטרף למשפחה');
+    sessionStorage.setItem('pending_join_code', cleanCode);
     await triggerGoogleLogin();
-    if (!currentUser) return;
+    return;
   }
 
   try {
     showToast('שולח בקשת הצטרפות למנהל המשפחה...');
-    const result = await requestJoinFamily(currentUser.uid, currentUser, code);
+    const result = await requestJoinFamily(currentUser.uid, currentUser, cleanCode);
     if (result.status === 'already_approved') {
       showToast('הנך כבר חבר מאושר במשפחה זו! 🎉');
-      loadDashboardForFamily(code);
+      loadDashboardForFamily(cleanCode);
     } else {
-      showToast('בקשת ההצטרפות נשלחה וממתינה לאישור מנהל המשפחה ⏳');
-      if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = code;
+      showToast('בקשת ההצטרפות נשלחה וממתינה לאישור מנהל המשפחה 🔒');
+      if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = cleanCode;
       showView('pending');
     }
   } catch (e) {
     showToast(e.message, true);
   }
 }
+window.triggerJoinFamilyWithCode = triggerJoinFamilyWithCode;
+
+export async function triggerJoinFamily() {
+  const input = document.getElementById('join-family-code-input');
+  const code = input?.value?.trim();
+  await triggerJoinFamilyWithCode(code);
+}
 window.triggerJoinFamily = triggerJoinFamily;
+
+window.triggerJoinFromWizard = function() {
+  const input = document.getElementById('wizard-join-code-input');
+  const code = input?.value?.trim();
+  triggerJoinFamilyWithCode(code);
+};
+
+window.switchOnboardingMode = function(mode) {
+  const btnCreate = document.getElementById('btn-mode-create');
+  const btnJoin = document.getElementById('btn-mode-join');
+  const containerCreate = document.getElementById('wizard-create-container');
+  const containerJoin = document.getElementById('wizard-join-container');
+
+  if (mode === 'join') {
+    if (btnCreate) btnCreate.className = 'flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition text-slate-400 hover:text-white';
+    if (btnJoin) btnJoin.className = 'flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition bg-indigo-600 text-white shadow';
+    if (containerCreate) containerCreate.classList.add('hidden');
+    if (containerJoin) containerJoin.classList.remove('hidden');
+    const input = document.getElementById('wizard-join-code-input');
+    if (input) input.focus();
+  } else {
+    if (btnCreate) btnCreate.className = 'flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition bg-indigo-600 text-white shadow';
+    if (btnJoin) btnJoin.className = 'flex-1 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition text-slate-400 hover:text-white';
+    if (containerCreate) containerCreate.classList.remove('hidden');
+    if (containerJoin) containerJoin.classList.add('hidden');
+  }
+};
 
 export async function triggerCancelJoin() {
   if (!currentUser) return;
-  const code = pendingFamilyCodeDisplay?.innerText || '';
+  const code = pendingFamilyCodeDisplay?.innerText?.trim() || '';
   try {
-    await cancelJoinRequest(currentUser.uid, code);
+    if (code) {
+      await cancelJoinRequest(currentUser.uid, code);
+    }
     showToast('בקשת ההצטרפות בוטלה');
     showView('onboarding');
   } catch (e) {
@@ -851,15 +887,13 @@ window.switchFamily = function() {
   const input = document.getElementById('active-family-id');
   const newId = input?.value?.trim();
   if (newId && newId !== currentFamilyId) {
-    setStoredFamilyId(newId);
-    window.location.reload();
+    triggerJoinFamilyWithCode(newId);
   }
 };
 
 function loadDashboardForFamily(familyId) {
   currentFamilyId = familyId;
   setStoredFamilyId(familyId);
-  showView('dashboard');
 
   if (familyIdDisplay) familyIdDisplay.innerText = familyId;
 
@@ -873,8 +907,31 @@ function loadDashboardForFamily(familyId) {
   updateConnectionStatus(false);
 
   familyUnsubscribe = subscribeToFamily(familyId, data => {
+    // STRICT SECURITY GATEKEEPER:
+    // Verify that currentUser is actually an approved member or owner of this family!
+    const currentUid = currentUser ? currentUser.uid : null;
+    const isApproved = data.ownerUid === currentUid || 
+                       (data.admins || []).includes(currentUid) || 
+                       (data.parents || []).includes(currentUid) || 
+                       (data.members || []).some(m => m.uid === currentUid);
+
+    if (!isApproved) {
+      console.warn(`[Security Gate] Access blocked to family ${familyId} for user ${currentUid}. User is not an approved member.`);
+      const isPending = (data.pendingMembers || []).some(p => p.uid === currentUid);
+      if (isPending) {
+        if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = familyId;
+        showView('pending');
+        showToast('הגישה ללוח חסומה עד לאישור מנהל המשפחה 🔒', true);
+      } else {
+        showView('onboarding');
+        showToast('אינך חבר מאושר במשפחה זו. הגישה חסומה 🔒', true);
+      }
+      return; // STOP! Under NO circumstances render children, chores, history, or tokens!
+    }
+
     currentData = data;
     updateConnectionStatus(true);
+    showView('dashboard');
     if (dashboardFamilyName && data.name) {
       dashboardFamilyName.innerText = data.name;
     }
@@ -885,6 +942,7 @@ function loadDashboardForFamily(familyId) {
   }, err => {
     updateConnectionStatus(false);
     console.error('[Parent] Subscription error:', err);
+    showToast('שגיאה בטעינת נתוני המשפחה או שאין הרשאת גישה', true);
   });
 }
 
@@ -915,11 +973,19 @@ function init() {
       userDisplayName.innerText = user.displayName || user.email || 'הורה';
     }
 
+    // Check if there was a pending join code from pre-auth landing page
+    const pendingJoinCode = sessionStorage.getItem('pending_join_code');
+    if (pendingJoinCode) {
+      sessionStorage.removeItem('pending_join_code');
+      triggerJoinFamilyWithCode(pendingJoinCode);
+      return;
+    }
+
     // Real-time listener on user profile
     if (userProfileUnsubscribe) userProfileUnsubscribe();
     userProfileUnsubscribe = subscribeToUserProfile(user.uid, profile => {
       if (profile && profile.status === 'pending') {
-        // User requested to join and is waiting for admin approval
+        // User requested to join and is waiting for admin approval -> Strictly BLOCK access
         if (pendingFamilyCodeDisplay) {
           pendingFamilyCodeDisplay.innerText = profile.pendingFamilyId || '';
         }
@@ -927,8 +993,11 @@ function init() {
       } else if (profile && profile.status === 'approved' && profile.familyId) {
         // User is an approved family member/admin!
         loadDashboardForFamily(profile.familyId);
+      } else if (profile && profile.status === 'rejected') {
+        showToast('בקשת ההצטרפות שלך נדחתה על ידי מנהל המשפחה', true);
+        showView('onboarding');
       } else {
-        // New user without a family yet -> Onboarding
+        // New user without a family yet -> Onboarding wizard
         showView('onboarding');
         const nameInput = document.getElementById('wizard-family-name');
         if (nameInput && user.displayName) {
