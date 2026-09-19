@@ -44,17 +44,34 @@ DEFAULT_STORAGE=${DEFAULT_STORAGE:-local-lvm}
 read -r -p "Storage pool for disk [default: $DEFAULT_STORAGE]: " CT_STORAGE
 CT_STORAGE=${CT_STORAGE:-$DEFAULT_STORAGE}
 
-read -r -p "Disk Size (GB) [default: 4G]: " CT_DISK
-CT_DISK=${CT_DISK:-4G}
+read -r -p "Disk Size in GB [default: 4]: " CT_DISK
+CT_DISK=${CT_DISK:-4}
+CT_DISK_SIZE=$(echo "$CT_DISK" | tr -d '[:alpha:]')
+CT_DISK_SIZE=${CT_DISK_SIZE:-4}
 
-read -r -p "Memory (MB) [default: 512]: " CT_RAM
+read -r -p "Memory in MB [default: 512]: " CT_RAM
 CT_RAM=${CT_RAM:-512}
+CT_RAM_SIZE=$(echo "$CT_RAM" | tr -d '[:alpha:]')
+CT_RAM_SIZE=${CT_RAM_SIZE:-512}
 
 read -r -p "CPU Cores [default: 1]: " CT_CORES
 CT_CORES=${CT_CORES:-1}
 
 read -r -p "Network Bridge [default: vmbr0]: " CT_BRIDGE
 CT_BRIDGE=${CT_BRIDGE:-vmbr0}
+
+# Check if container ID already exists
+if pct status "$CT_ID" >/dev/null 2>&1; then
+    echo "⚠️ Container $CT_ID already exists."
+    read -r -p "Do you want to destroy existing CT $CT_ID and recreate it? [y/N]: " DESTROY_CT
+    if [[ "$DESTROY_CT" =~ ^[Yy]$ ]]; then
+        pct stop "$CT_ID" >/dev/null 2>&1 || true
+        pct destroy "$CT_ID" >/dev/null 2>&1 || true
+    else
+        echo "Please re-run the script and select another Container ID."
+        exit 1
+    fi
+fi
 
 # Update Template Catalog & Detect Debian 12 Template
 echo ""
@@ -84,9 +101,9 @@ echo "=== [2/4] Creating LXC Container $CT_ID ($CT_HOSTNAME) ==="
 pct create "$CT_ID" "$TEMPLATE_PATH" \
     --hostname "$CT_HOSTNAME" \
     --cores "$CT_CORES" \
-    --memory "$CT_RAM" \
+    --memory "$CT_RAM_SIZE" \
     --swap 512 \
-    --rootfs "$CT_STORAGE:$CT_DISK" \
+    --rootfs "${CT_STORAGE}:${CT_DISK_SIZE}" \
     --net0 "name=eth0,bridge=$CT_BRIDGE,ip=dhcp,type=veth" \
     --ostype debian \
     --unprivileged 1 \
