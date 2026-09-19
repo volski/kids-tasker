@@ -447,33 +447,22 @@ function loadFamilyBoard(familyId, tokenCandidate = null) {
       (data.members || []).some(m => m.uid === currentUid)
     ));
 
-    // If NOT an approved Google user, tablet device gatekeeper is strictly enforced:
-    if (!isApprovedUser) {
-      if (!isValidTabletToken) {
-        // Not a valid tablet token
-        if (wasApprovedTablet) {
-          // Token changed / invalidated
-          wasApprovedTablet = false;
-          localStorage.removeItem('kids_tasker_tablet_token');
-          showView('tablet-disconnected');
-          showToast('הטאבלט נותק על ידי מנהל המשפחה 🔒', true);
-          return;
-        }
+    // Check if this is an explicit parent preview on desktop/phone
+    const urlParams = new URLSearchParams(window.location.search);
+    const isParentPreview = urlParams.get('preview') === 'true' && isApprovedUser;
 
-        console.warn(`[Security Gate] Tablet access blocked to family ${familyId}. Neither valid tablet token nor approved Google user.`);
-        const isPending = Boolean(currentUser && (data.pendingMembers || []).some(p => p.uid === currentUid));
-        if (isPending) {
-          if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = familyId;
-          showView('pending');
-          showToast('הגישה ללוח חסומה עד לאישור מנהל המשפחה 🔒', true);
-        } else {
-          showView('auth');
-          showToast('נדרש טוקן טאבלט תקין מקוד ה-QR או התחברות Google 🔒', true);
-        }
-        return; // STOP! Never render children or chores
-      }
+    // Show/hide preview badge
+    const previewBadge = document.getElementById('parent-preview-badge');
+    if (previewBadge) {
+      if (isParentPreview) previewBadge.classList.remove('hidden');
+      else previewBadge.classList.add('hidden');
+    }
 
-      // Valid tablet token: Check if tablet device is in the approved tablets list!
+    // STRICT TABLET SECURITY GATEKEEPER:
+    // If NOT an explicit parent preview, this screen is in TABLET MODE.
+    // The previous allowed method (Google login or unapproved token) is STRICTLY REMOVED.
+    // Every tablet MUST be in data.tablets!
+    if (!isParentPreview) {
       if (!isApprovedTablet) {
         // If the tablet WAS previously approved in this session, it was just removed by an admin!
         if (wasApprovedTablet) {
@@ -485,8 +474,16 @@ function loadFamilyBoard(familyId, tokenCandidate = null) {
           return; // STOP! Disconnected!
         }
 
-        // Tablet is not yet approved
-        console.warn(`[Security Gate] Tablet ${deviceId} is pending approval by family admin.`);
+        // Check if a valid QR token was provided
+        if (!isValidTabletToken) {
+          console.warn(`[Security Gate] Tablet access blocked. Invalid token or legacy allowed method.`);
+          showView('auth');
+          showToast('נדרש סריקת קוד QR עדכני מלוח ההורים 🔒', true);
+          return;
+        }
+
+        // Valid token, but device not yet approved by admin:
+        console.warn(`[Security Gate] Tablet ${deviceId} is pending approval in family ${familyId}.`);
         if (tabletFamilyDisplay) tabletFamilyDisplay.innerText = data.name || familyId;
         if (tabletDeviceIdDisplay) tabletDeviceIdDisplay.innerText = deviceId;
 
@@ -504,15 +501,12 @@ function loadFamilyBoard(familyId, tokenCandidate = null) {
         }
 
         showView('tablet-pending');
-        return; // STOP! Never render chores until approved
+        return; // STOP! Never render chores until approved in data.tablets!
       }
 
       // The tablet device is approved!
       wasApprovedTablet = true;
-    }
 
-    // Access granted!
-    if (isValidTabletToken) {
       // Tablet Kid Mode active
       const tabletBadge = document.getElementById('tablet-mode-badge');
       if (tabletBadge) tabletBadge.classList.remove('hidden');
@@ -520,6 +514,9 @@ function loadFamilyBoard(familyId, tokenCandidate = null) {
       if (parentNav) {
         parentNav.title = 'ניהול הורים (מוגן בכניסת מנהל עם חשבון Google)';
       }
+
+      // Hide parent user profile bar in tablet mode so kids cannot click it
+      if (userProfileBar) userProfileBar.classList.add('hidden');
     }
 
     updateConnectionStatus(true);
@@ -541,6 +538,7 @@ function init() {
   const urlParams = new URLSearchParams(window.location.search);
   const urlFamily = urlParams.get('family');
   const urlToken = urlParams.get('token');
+  const isParentPreview = urlParams.get('preview') === 'true';
 
   if (urlFamily && urlFamily.trim()) {
     setStoredFamilyId(urlFamily.trim());
@@ -553,8 +551,8 @@ function init() {
 
   const activeToken = getActiveTabletToken();
 
-  // If we already have an active tablet token and family ID, load immediately (BYPASS AUTH!)
-  if (activeToken && currentFamilyId && currentFamilyId !== 'demo-family') {
+  // If we have an active tablet token and family ID in Tablet Mode (not preview), load immediately
+  if (activeToken && currentFamilyId && currentFamilyId !== 'demo-family' && !isParentPreview) {
     loadFamilyBoard(currentFamilyId, activeToken);
   }
 
@@ -564,8 +562,8 @@ function init() {
 
     if (!user) {
       // Not logged in with Google.
-      // If we have a valid token from QR code/localStorage, the tablet stays in Kids Mode!
-      if (activeToken && currentFamilyId && currentFamilyId !== 'demo-family') {
+      // If we have a valid token from QR code/localStorage in tablet mode, load board
+      if (activeToken && currentFamilyId && currentFamilyId !== 'demo-family' && !isParentPreview) {
         if (userProfileBar) userProfileBar.classList.add('hidden');
         return;
       }
@@ -579,42 +577,57 @@ function init() {
       return;
     }
 
-    // User is authenticated with Google
-    if (userProfileBar) userProfileBar.classList.remove('hidden');
-    if (userAvatar && user.photoURL) {
-      userAvatar.src = user.photoURL;
-      userAvatar.classList.remove('hidden');
-    }
-    if (userDisplayName) {
-      userDisplayName.innerText = user.displayName || user.email || 'משתמש';
+    // User is authenticated with Google:
+    // Only show profile bar in Parent Preview mode!
+    if (isParentPreview) {
+      if (userProfileBar) userProfileBar.classList.remove('hidden');
+      if (userAvatar && user.photoURL) {
+        userAvatar.src = user.photoURL;
+        userAvatar.classList.remove('hidden');
+      }
+      if (userDisplayName) {
+        userDisplayName.innerText = user.displayName || user.email || 'הורה (תצוגה מקדימה)';
+      }
+    } else {
+      if (userProfileBar) userProfileBar.classList.add('hidden');
     }
 
     // Subscribe to user profile in real-time
     if (userProfileUnsubscribe) userProfileUnsubscribe();
     userProfileUnsubscribe = subscribeToUserProfile(user.uid, profile => {
-      // 1. If explicitly pending, block access immediately
-      if (profile && profile.status === 'pending') {
-        if (pendingFamilyCodeDisplay) {
-          pendingFamilyCodeDisplay.innerText = profile.pendingFamilyId || '';
+      // In parent preview mode:
+      if (isParentPreview) {
+        if (profile && profile.status === 'pending') {
+          if (pendingFamilyCodeDisplay) {
+            pendingFamilyCodeDisplay.innerText = profile.pendingFamilyId || '';
+          }
+          showView('pending');
+          return;
         }
-        showView('pending');
+
+        const storedId = getStoredFamilyId();
+        const targetFamilyId = (profile && profile.familyId) 
+          ? profile.familyId 
+          : (urlFamily && urlFamily.trim())
+            ? urlFamily.trim()
+            : (storedId && storedId !== 'demo-family')
+              ? storedId
+              : null;
+
+        if (targetFamilyId) {
+          loadFamilyBoard(targetFamilyId, activeToken);
+        } else {
+          showView('no-family');
+        }
         return;
       }
 
-      // 2. Resolve family ID to load
-      const storedId = getStoredFamilyId();
-      const targetFamilyId = (profile && profile.familyId) 
-        ? profile.familyId 
-        : (urlFamily && urlFamily.trim())
-          ? urlFamily.trim()
-          : (storedId && storedId !== 'demo-family')
-            ? storedId
-            : null;
-
-      if (targetFamilyId) {
-        loadFamilyBoard(targetFamilyId, activeToken);
+      // In Tablet Mode:
+      // The tablet board is loaded strictly with activeToken, requiring device approval in data.tablets.
+      if (activeToken && currentFamilyId && currentFamilyId !== 'demo-family') {
+        loadFamilyBoard(currentFamilyId, activeToken);
       } else {
-        showView('no-family');
+        showView('auth');
       }
     });
   });

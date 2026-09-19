@@ -38,6 +38,7 @@ import {
   rejectTablet,
   removeTablet,
   updateTabletName,
+  revokeAllTablets,
   ICON_LABELS 
 } from './db.js';
 
@@ -363,21 +364,22 @@ window.copyPairTabletUrl = function() {
   }
 };
 
-window.handleRegenerateTabletToken = async function() {
-  if (!confirm('האם ליצור טוקן חדש? שים לב: טאבלטים שכבר חוברו בעבר יידרשו לסרוק מחדש את קוד ה-QR.')) return;
+window.handleRevokeAllTablets = async function() {
+  if (!confirm('האם לנתק את כל הטאבלטים מהשיטה הקודמת ולאפס את טוקן החיבור?\nכל הטאבלטים (כולל אלו שהתחברו בעבר) ינותקו מידית ויידרשו לסרוק מחדש את קוד ה-QR ולקבל אישור מנהל.')) return;
   try {
-    showToast('מייצר טוקן מאובטח חדש...');
-    const token = await regenerateTabletToken(currentFamilyId);
+    showToast('מנתק את כל הטאבלטים ומאפס טוקן...');
+    const token = await revokeAllTablets(currentFamilyId);
     const tabletUrl = `${window.location.origin}/index.html?family=${encodeURIComponent(currentFamilyId)}&token=${encodeURIComponent(token)}`;
     const urlInput = document.getElementById('pair-tablet-url');
     const qrImg = document.getElementById('pair-qr-img');
     if (urlInput) urlInput.value = tabletUrl;
     if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(tabletUrl)}`;
-    showToast('טוקן טאבלט חדש נוצר בהצלחה! 📱');
+    showToast('כל הטאבלטים מהשיטה הקודמת נותקו וטוקן חדש נוצר בהצלחה! 🔒');
   } catch (e) {
     showToast(e.message, true);
   }
 };
+window.handleRegenerateTabletToken = window.handleRevokeAllTablets;
 
 // ==========================================
 // Dashboard Logic

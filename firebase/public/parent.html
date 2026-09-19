@@ -349,7 +349,7 @@
             <span>חבר טאבלט</span>
           </button>
 
-          <a href="/index.html" class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-sm transition">
+          <a href="/index.html?preview=true" class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-sm transition" title="צפה בלוח בתצוגה מקדימה להורים">
             <span>👀</span>
             <span>צפה בלוח</span>
           </a>
@@ -620,10 +620,20 @@
                 ניהול מכשירים המורשים להציג את לוח הילדים. טאבלט חדש דורש אישור מנהל, והסרתו מנתקת אותו מידית.
               </p>
             </div>
-            <button onclick="window.openPairModal()" class="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow">
-              <span>➕</span>
-              <span>חבר טאבלט חדש (QR)</span>
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+              <button 
+                onclick="window.handleRevokeAllTablets()" 
+                class="px-3.5 py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow" 
+                title="מנתק מידית את כל הטאבלטים שהתחברו בעבר ומאפס את הטוקן המשפחתי"
+              >
+                <span>🔄</span>
+                <span>נתק את כל הטאבלטים מהשיטה הקודמת</span>
+              </button>
+              <button onclick="window.openPairModal()" class="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow">
+                <span>➕</span>
+                <span>חבר טאבלט חדש (QR)</span>
+              </button>
+            </div>
           </div>
 
           <!-- Pending Tablets Subsection -->
@@ -753,11 +763,11 @@
 
       <div class="pt-2 border-t border-slate-800">
         <button 
-          onclick="window.handleRegenerateTabletToken()" 
-          class="text-xs text-indigo-400 hover:text-indigo-300 font-bold transition flex items-center gap-1.5 justify-center mx-auto"
+          onclick="window.handleRevokeAllTablets()" 
+          class="text-xs text-rose-400 hover:text-rose-300 font-bold transition flex items-center gap-1.5 justify-center mx-auto"
         >
           <span>🔄</span>
-          <span>צור טוקן חדש (מבטל חיבור טאבלטים קודמים)</span>
+          <span>נתק את כל הטאבלטים מהשיטה הקודמת ואפס טוקן</span>
         </button>
       </div>
     </div>
