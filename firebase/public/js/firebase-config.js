@@ -13,8 +13,10 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import { 
   getFirestore, 
-  connectFirestoreEmulator, 
-  enableIndexedDbPersistence 
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  connectFirestoreEmulator
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // Resolve Firebase configuration
@@ -68,7 +70,18 @@ if (!isConfigured) {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+
+// Modern Firestore offline cache (replaces deprecated enableIndexedDbPersistence)
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
+  });
+} catch (e) {
+  db = getFirestore(app);
+}
 
 // Check if running on local emulator
 if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
@@ -82,17 +95,6 @@ if (window.location.hostname === 'localhost' || window.location.hostname === '12
     }
   }
 }
-
-// Enable offline persistence for tablet reliability
-try {
-  enableIndexedDbPersistence(db).catch(err => {
-    if (err.code === 'failed-precondition') {
-      console.warn('[Firestore] Multiple tabs open; offline persistence enabled in first tab only.');
-    } else if (err.code === 'unimplemented') {
-      console.warn('[Firestore] Browser does not support offline persistence.');
-    }
-  });
-} catch (e) {}
 
 // Active Family ID Session Helper
 const FAMILY_KEY = 'kids_tasker_family_id';

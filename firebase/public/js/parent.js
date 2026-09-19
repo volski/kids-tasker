@@ -476,4 +476,9 @@ function init() {
   });
 }
 
-window.addEventListener('DOMContentLoaded', init);
+// Run init immediately if DOM is already ready (top-level await support)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
