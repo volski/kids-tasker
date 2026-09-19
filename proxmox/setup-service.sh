@@ -23,13 +23,28 @@ echo "=== [3/5] Setting up Kids Tasker in /opt/kids-tasker ==="
 APP_DIR="/opt/kids-tasker"
 DATA_DIR="/opt/kids-tasker/data"
 
-if [ -d "$APP_DIR/.git" ]; then
+if [ -f "$APP_DIR/server.js" ]; then
+    echo "Found existing installation in $APP_DIR. Skipping clone..."
+    cd "$APP_DIR"
+elif [ -d "$APP_DIR/.git" ]; then
     echo "Updating existing repository..."
     cd "$APP_DIR"
-    git pull
+    git pull || true
 else
     echo "Cloning repository..."
-    git clone https://github.com/volski/kids-tasker.git "$APP_DIR"
+    if [ -n "$GITHUB_TOKEN" ]; then
+        git clone "https://${GITHUB_TOKEN}@github.com/volski/kids-tasker.git" "$APP_DIR"
+    else
+        echo "🔒 Repository is private. Enter GitHub Personal Access Token (PAT):"
+        read -r -s -p "GitHub Token (input is hidden): " GITHUB_TOKEN
+        echo ""
+        if [ -n "$GITHUB_TOKEN" ]; then
+            git clone "https://${GITHUB_TOKEN}@github.com/volski/kids-tasker.git" "$APP_DIR"
+        else
+            echo "❌ No token provided. Cannot clone private repository."
+            exit 1
+        fi
+    fi
     cd "$APP_DIR"
 fi
 
