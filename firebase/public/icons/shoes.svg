@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#14B8A6" fill-opacity="0.2"/>
+  <!-- Sneaker sole -->
+  <path d="M12 44C12 44 14 48 20 48H48C52 48 54 44 54 44H12Z" fill="#F8FAFC" stroke="#0F766E" stroke-width="2"/>
+  <!-- Sneaker upper -->
+  <path d="M14 44C14 44 16 34 26 34L36 34L44 26H50L52 44H14Z" fill="#0D9488" stroke="#0F766E" stroke-width="2" stroke-linejoin="round"/>
+  <!-- Toe cap -->
+  <path d="M14 44C14 40 18 38 22 38V44H14Z" fill="#CCFBF1"/>
+  <!-- Laces -->
+  <line x1="36" y1="32" x2="40" y2="36" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  <line x1="40" y1="28" x2="44" y2="32" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+</svg>

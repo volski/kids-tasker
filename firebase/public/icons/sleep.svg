@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#312E81" fill-opacity="0.2"/>
+  <!-- Crescent Moon -->
+  <path d="M38 14C24 14 16 26 16 38C16 46 21 52 27 54C25 50 24 45 24 40C24 26 35 16 48 16C45 14.8 41.5 14 38 14Z" fill="#FDE047" stroke="#EAB308" stroke-width="1.5"/>
+  <!-- Sleeping cap or stars -->
+  <!-- Star 1 -->
+  <path d="M46 26L47 29L50 30L47 31L46 34L45 31L42 30L45 29Z" fill="#F8FAFC"/>
+  <!-- Star 2 -->
+  <path d="M40 38L41 40L43 41L41 42L40 44L39 42L37 41L39 40Z" fill="#F8FAFC"/>
+  <!-- Zzz letters -->
+  <text x="46" y="52" fill="#C7D2FE" font-family="sans-serif" font-weight="bold" font-size="10">z</text>
+  <text x="52" y="46" fill="#C7D2FE" font-family="sans-serif" font-weight="bold" font-size="12">Z</text>
+</svg>

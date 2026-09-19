@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#0284C7" fill-opacity="0.2"/>
+  <!-- Glass shape -->
+  <path d="M18 16L22 48C22 51 25 54 28 54H36C39 54 42 51 42 48L46 16H18Z" fill="#E0F2FE" fill-opacity="0.5" stroke="#0284C7" stroke-width="2"/>
+  <!-- Water inside -->
+  <path d="M20 28L22 48C22 50 25 52 28 52H36C39 52 42 50 42 48L44 28C41 30 38 27 35 28C32 29 29 27 26 28C23 29 21 28 20 28Z" fill="#38BDF8"/>
+  <!-- Droplets floating -->
+  <path d="M48 18C48 20.2 46 22 44 22C42 22 40 20.2 40 18C40 15 44 11 44 11C44 11 48 15 48 18Z" fill="#0EA5E9"/>
+  <circle cx="34" cy="38" r="1.5" fill="#FFFFFF" fill-opacity="0.8"/>
+  <circle cx="28" cy="44" r="1" fill="#FFFFFF" fill-opacity="0.8"/>
+</svg>
