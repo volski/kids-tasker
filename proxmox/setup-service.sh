@@ -35,15 +35,7 @@ else
     if [ -n "$GITHUB_TOKEN" ]; then
         git clone "https://${GITHUB_TOKEN}@github.com/volski/kids-tasker.git" "$APP_DIR"
     else
-        echo "🔒 Repository is private. Enter GitHub Personal Access Token (PAT):"
-        read -r -s -p "GitHub Token (input is hidden): " GITHUB_TOKEN
-        echo ""
-        if [ -n "$GITHUB_TOKEN" ]; then
-            git clone "https://${GITHUB_TOKEN}@github.com/volski/kids-tasker.git" "$APP_DIR"
-        else
-            echo "❌ No token provided. Cannot clone private repository."
-            exit 1
-        fi
+        git clone https://github.com/volski/kids-tasker.git "$APP_DIR"
     fi
     cd "$APP_DIR"
 fi
