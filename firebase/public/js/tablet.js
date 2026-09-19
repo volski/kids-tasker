@@ -373,7 +373,17 @@ export function renderBoard(data) {
   }).join('');
 }
 
-function loadFamilyBoard(familyId) {
+function getActiveTabletToken() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlToken = urlParams.get('token');
+  if (urlToken && urlToken.trim()) {
+    localStorage.setItem('kids_tasker_tablet_token', urlToken.trim());
+    return urlToken.trim();
+  }
+  return (localStorage.getItem('kids_tasker_tablet_token') || '').trim();
+}
+
+function loadFamilyBoard(familyId, tokenCandidate = null) {
   currentFamilyId = familyId;
   setStoredFamilyId(familyId);
 
@@ -381,10 +391,15 @@ function loadFamilyBoard(familyId) {
   updateConnectionStatus(false);
   showView('loading');
 
+  const activeToken = tokenCandidate || getActiveTabletToken();
+
   familyUnsubscribe = subscribeToFamily(familyId, async data => {
     const currentUid = currentUser ? currentUser.uid : null;
 
-    // Auto-claim legacy or unowned family for current user
+    // 1. Check if token matches family's tabletToken (Bypasses Google Auth for kids view)
+    const isValidTabletToken = Boolean(activeToken && data.tabletToken && (activeToken === data.tabletToken));
+
+    // 2. Auto-claim legacy or unowned family if Google user logged in
     if (!data.ownerUid && (!data.admins || data.admins.length === 0) && currentUser) {
       await claimFamilyIfUnowned(familyId, currentUser);
       data.ownerUid = currentUid;
@@ -392,25 +407,37 @@ function loadFamilyBoard(familyId) {
       data.parents = [currentUid];
     }
 
-    // STRICT SECURITY GATEKEEPER:
-    // Verify that currentUser is actually an approved member or owner of this family!
-    const isApproved = data.ownerUid === currentUid || 
-                       (data.admins || []).includes(currentUid) || 
-                       (data.parents || []).includes(currentUid) || 
-                       (data.members || []).some(m => m.uid === currentUid);
+    // 3. Check Google Auth membership
+    const isApprovedUser = Boolean(currentUser && (
+      data.ownerUid === currentUid || 
+      (data.admins || []).includes(currentUid) || 
+      (data.parents || []).includes(currentUid) || 
+      (data.members || []).some(m => m.uid === currentUid)
+    ));
 
-    if (!isApproved) {
-      console.warn(`[Security Gate] Tablet access blocked to family ${familyId} for user ${currentUid}. User is not approved.`);
-      const isPending = (data.pendingMembers || []).some(p => p.uid === currentUid);
+    if (!isValidTabletToken && !isApprovedUser) {
+      console.warn(`[Security Gate] Tablet access blocked to family ${familyId}. Neither valid tablet token nor approved Google user.`);
+      const isPending = Boolean(currentUser && (data.pendingMembers || []).some(p => p.uid === currentUid));
       if (isPending) {
         if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = familyId;
         showView('pending');
         showToast('הגישה ללוח חסומה עד לאישור מנהל המשפחה 🔒', true);
       } else {
-        showView('no-family');
-        showToast('הגישה למשפחה זו חסומה 🔒. אינך חבר מאושר.', true);
+        showView('auth');
+        showToast('נדרש טוקן טאבלט תקין מקוד ה-QR או התחברות Google 🔒', true);
       }
       return; // STOP! Never render children or chores
+    }
+
+    // Access granted!
+    if (isValidTabletToken) {
+      // Tablet Kid Mode active
+      const tabletBadge = document.getElementById('tablet-mode-badge');
+      if (tabletBadge) tabletBadge.classList.remove('hidden');
+      const parentNav = document.getElementById('btn-parent-nav');
+      if (parentNav) {
+        parentNav.title = 'ניהול הורים (מוגן בכניסת מנהל עם חשבון Google)';
+      }
     }
 
     updateConnectionStatus(true);
@@ -428,11 +455,40 @@ function init() {
   updateConnectionStatus(false);
   showView('loading');
 
+  // Check URL query parameters for family & tablet token
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlFamily = urlParams.get('family');
+  const urlToken = urlParams.get('token');
+
+  if (urlFamily && urlFamily.trim()) {
+    setStoredFamilyId(urlFamily.trim());
+    currentFamilyId = urlFamily.trim();
+  }
+
+  if (urlToken && urlToken.trim()) {
+    localStorage.setItem('kids_tasker_tablet_token', urlToken.trim());
+  }
+
+  const activeToken = getActiveTabletToken();
+
+  // If we already have an active tablet token and family ID, load immediately (BYPASS AUTH!)
+  if (activeToken && currentFamilyId && currentFamilyId !== 'demo-family') {
+    loadFamilyBoard(currentFamilyId, activeToken);
+  }
+
   // Monitor Authentication State
   subscribeToAuth(user => {
     currentUser = user;
 
     if (!user) {
+      // Not logged in with Google.
+      // If we have a valid token from QR code/localStorage, the tablet stays in Kids Mode!
+      if (activeToken && currentFamilyId && currentFamilyId !== 'demo-family') {
+        if (userProfileBar) userProfileBar.classList.add('hidden');
+        return;
+      }
+
+      // No token and not logged in -> Auth Landing
       if (familyUnsubscribe) familyUnsubscribe();
       if (userProfileUnsubscribe) userProfileUnsubscribe();
       if (userProfileBar) userProfileBar.classList.add('hidden');
@@ -450,10 +506,6 @@ function init() {
     if (userDisplayName) {
       userDisplayName.innerText = user.displayName || user.email || 'משתמש';
     }
-
-    // Check if URL specifies a family, e.g. ?family=...
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlFamily = urlParams.get('family');
 
     // Subscribe to user profile in real-time
     if (userProfileUnsubscribe) userProfileUnsubscribe();
@@ -478,7 +530,7 @@ function init() {
             : null;
 
       if (targetFamilyId) {
-        loadFamilyBoard(targetFamilyId);
+        loadFamilyBoard(targetFamilyId, activeToken);
       } else {
         showView('no-family');
       }
