@@ -96,7 +96,8 @@ const DEFAULT_TASKS_DATA = {
   ],
   history: [],
   lastActiveDate: getTodayDateString(),
-  homeAssistant: { ...DEFAULT_HASS_CONFIG }
+  homeAssistant: { ...DEFAULT_HASS_CONFIG },
+  parentPin: null
 };
 
 // Detect intelligent default icon from title
@@ -125,6 +126,12 @@ function normalizeTasksData(data) {
   if (!Array.isArray(data.children)) data.children = [];
   if (!Array.isArray(data.history)) data.history = [];
   if (!data.lastActiveDate) data.lastActiveDate = getTodayDateString();
+
+  if (data.parentPin === undefined) {
+    data.parentPin = null;
+  } else if (typeof data.parentPin === 'string') {
+    data.parentPin = data.parentPin.trim() || null;
+  }
 
   if (!data.homeAssistant || typeof data.homeAssistant !== 'object') {
     data.homeAssistant = { ...DEFAULT_HASS_CONFIG };
@@ -1194,6 +1201,78 @@ app.get('/api/hass/card-yaml', (req, res) => {
   }
 });
 
+// ==========================================
+// Parent Access PIN Protection Endpoints
+// ==========================================
+
+// Check if a parent PIN is configured
+app.get('/api/parent/pin-status', (req, res) => {
+  try {
+    const data = readTasks();
+    const hasPin = Boolean(data.parentPin && String(data.parentPin).trim().length >= 4);
+    res.json({ success: true, hasPin });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to retrieve PIN status' });
+  }
+});
+
+// Verify entered parent PIN
+app.post('/api/parent/verify-pin', (req, res) => {
+  try {
+    const { pin } = req.body || {};
+    const data = readTasks();
+    const existingPin = data.parentPin ? String(data.parentPin).trim() : null;
+
+    // If no PIN has been set yet, any verification is bypassed / indicates setup needed
+    if (!existingPin || existingPin.length < 4) {
+      return res.json({ success: true, needsSetup: true });
+    }
+
+    const cleanPin = String(pin || '').trim();
+    if (cleanPin === existingPin) {
+      return res.json({ success: true, message: 'קוד ה-PIN אומת בהצלחה' });
+    }
+
+    return res.status(401).json({ success: false, error: 'קוד ה-PIN שגוי. נסה שוב.' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to verify PIN' });
+  }
+});
+
+// Set or change parent PIN (4-6 digits)
+app.post('/api/parent/set-pin', (req, res) => {
+  try {
+    const { pin, confirmPin, currentPin } = req.body || {};
+    const data = readTasks();
+    const existingPin = data.parentPin ? String(data.parentPin).trim() : null;
+
+    // If a PIN already exists, require valid currentPin
+    if (existingPin && existingPin.length >= 4) {
+      if (!currentPin || String(currentPin).trim() !== existingPin) {
+        return res.status(401).json({ success: false, error: 'קוד ה-PIN הנוכחי אינו נכון.' });
+      }
+    }
+
+    const cleanPin = String(pin || '').trim();
+    const cleanConfirm = String(confirmPin || '').trim();
+
+    if (!/^\d{4,6}$/.test(cleanPin)) {
+      return res.status(400).json({ success: false, error: 'על קוד ה-PIN להכיל בין 4 ל-6 ספרות בלבד.' });
+    }
+
+    if (cleanPin !== cleanConfirm) {
+      return res.status(400).json({ success: false, error: 'אימות הקוד אינו תואם לקוד שהוקלד.' });
+    }
+
+    data.parentPin = cleanPin;
+    writeTasks(data);
+
+    res.json({ success: true, message: 'קוד ה-PIN נשמר בהצלחה!' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to save PIN' });
+  }
+});
+
 // API Endpoints: Tasks
 app.get('/api/tasks', (req, res) => {
   try {
@@ -1547,10 +1626,10 @@ app.get('/', (req, res) => {
           <!-- Injected dynamically -->
         </div>
 
-        <a href="/parent" class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 shadow-sm transition">
+        <button onclick="handleParentAccess(event)" class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 shadow-sm transition">
           <span>⚙️</span>
           <span>ניהול הורים</span>
-        </a>
+        </button>
 
         <div id="status-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">
           <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
@@ -1579,8 +1658,51 @@ app.get('/', (req, res) => {
 
   <!-- Footer Info -->
   <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-900">
-    לוח משימות לילדים &bull; סנכרון בזמן אמת &bull; מותאם למסכי מגע &bull; <a href="/parent" class="text-indigo-400 hover:underline">לוח ניהול הורים</a>
+    לוח משימות לילדים &bull; סנכרון בזמן אמת &bull; מותאם למסכי מגע &bull; <button onclick="handleParentAccess(event)" class="text-indigo-400 hover:underline bg-transparent border-0 cursor-pointer p-0 font-inherit text-xs">לוח ניהול הורים</button>
   </footer>
+
+  <!-- PIN Modal Overlay -->
+  <div id="pin-modal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm hidden" role="dialog" aria-modal="true">
+    <div id="pin-box" class="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-xs flex flex-col items-center gap-5 select-none mx-4">
+      <div class="text-center">
+        <div class="text-4xl mb-2">👑</div>
+        <h2 class="text-xl font-black text-white" id="pin-title">כניסה להורים</h2>
+        <p class="text-sm text-slate-400 mt-1" id="pin-subtitle">הזן את קוד ה-PIN (4-6 ספרות)</p>
+      </div>
+
+      <div id="pin-dots" class="flex gap-3 items-center justify-center min-h-[2.5rem]"></div>
+      <p id="pin-error" class="text-rose-400 text-sm font-bold text-center hidden min-h-[1.25rem]"></p>
+
+      <div class="grid grid-cols-3 gap-3 w-full">
+        <button class="pin-key" data-digit="1">1</button>
+        <button class="pin-key" data-digit="2">2</button>
+        <button class="pin-key" data-digit="3">3</button>
+        <button class="pin-key" data-digit="4">4</button>
+        <button class="pin-key" data-digit="5">5</button>
+        <button class="pin-key" data-digit="6">6</button>
+        <button class="pin-key" data-digit="7">7</button>
+        <button class="pin-key" data-digit="8">8</button>
+        <button class="pin-key" data-digit="9">9</button>
+        <button id="pin-cancel-btn" class="pin-key pin-key-secondary text-sm">ביטול</button>
+        <button class="pin-key" data-digit="0">0</button>
+        <button id="pin-del-btn" class="pin-key pin-key-del">⌫</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .pin-key {
+      height: 64px; border-radius: 16px; font-size: 1.5rem; font-weight: 800;
+      color: #fff; background: #1e293b; border: 1px solid #334155;
+      transition: background 0.1s, transform 0.08s; touch-action: manipulation;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;
+    }
+    .pin-key:active, .pin-key:focus-visible { background: #3730a3; transform: scale(0.93); outline: none; }
+    .pin-key-secondary { font-size: 0.85rem; background: #334155; }
+    .pin-key-del { font-size: 1.3rem; background: #450a0a; border-color: #7f1d1d; }
+    @keyframes pinShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-10px)} 60%{transform:translateX(10px)} 80%{transform:translateX(-6px)} }
+    .pin-shake { animation: pinShake 0.38s ease; }
+  </style>
 
   <!-- Socket.io client script served automatically by socket.io server -->
   <script src="/socket.io/socket.io.js"></script>
@@ -1861,6 +1983,175 @@ app.get('/', (req, res) => {
     });
 
     fetchTasks();
+
+    // ==========================================
+    // Parent PIN Access Logic
+    // ==========================================
+    (function initPinModal() {
+      const modal = document.getElementById('pin-modal');
+      const pinBox = document.getElementById('pin-box');
+      const pinTitle = document.getElementById('pin-title');
+      const pinSubtitle = document.getElementById('pin-subtitle');
+      const pinDots = document.getElementById('pin-dots');
+      const pinError = document.getElementById('pin-error');
+      const cancelBtn = document.getElementById('pin-cancel-btn');
+      const delBtn = document.getElementById('pin-del-btn');
+
+      // Mode: 'verify' | 'setup_enter' | 'setup_confirm'
+      let pinMode = 'verify';
+      let currentPin = '';
+      let firstPin = '';
+      const MAX_PIN = 6;
+
+      function renderDots(len, maxLen) {
+        pinDots.innerHTML = Array.from({ length: maxLen || MAX_PIN }, (_, i) =>
+          \`<div class="w-4 h-4 rounded-full border-2 transition-all duration-150 \${i < len ? 'bg-indigo-400 border-indigo-400 scale-110' : 'bg-transparent border-slate-600'}"></div>\`
+        ).join('');
+      }
+
+      function showError(msg) {
+        pinError.textContent = msg;
+        pinError.classList.remove('hidden');
+        pinBox.classList.add('pin-shake');
+        setTimeout(() => pinBox.classList.remove('pin-shake'), 400);
+      }
+
+      function clearError() {
+        pinError.classList.add('hidden');
+        pinError.textContent = '';
+      }
+
+      function resetModal(mode) {
+        pinMode = mode;
+        currentPin = '';
+        firstPin = '';
+        clearError();
+        if (mode === 'verify') {
+          pinTitle.textContent = 'כניסה להורים';
+          pinSubtitle.textContent = 'הזן את קוד ה-PIN';
+        } else if (mode === 'setup_enter') {
+          pinTitle.textContent = '🔐 הגדרת קוד גישה';
+          pinSubtitle.textContent = 'בחר קוד PIN חדש (4-6 ספרות)';
+        } else if (mode === 'setup_confirm') {
+          pinTitle.textContent = '✅ אמת את הקוד';
+          pinSubtitle.textContent = 'הזן שוב את הקוד לאימות';
+        }
+        renderDots(0);
+      }
+
+      function closeModal() {
+        modal.classList.add('hidden');
+        currentPin = '';
+        firstPin = '';
+        clearError();
+      }
+
+      async function submitPin() {
+        if (pinMode === 'verify') {
+          if (currentPin.length < 4) {
+            showError('קוד ה-PIN חייב להכיל לפחות 4 ספרות');
+            return;
+          }
+          try {
+            const res = await fetch('/api/parent/verify-pin', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pin: currentPin })
+            });
+            const data = await res.json();
+            if (data.success) {
+              sessionStorage.setItem('kids_tasker_parent_unlocked', '1');
+              closeModal();
+              window.location.href = '/parent';
+            } else {
+              showError(data.error || 'קוד שגוי, נסה שוב');
+              currentPin = '';
+              renderDots(0);
+            }
+          } catch (e) {
+            showError('שגיאת תקשורת, נסה שוב');
+          }
+        } else if (pinMode === 'setup_enter') {
+          if (currentPin.length < 4) { showError('יש להזין לפחות 4 ספרות'); return; }
+          firstPin = currentPin;
+          resetModal('setup_confirm');
+        } else if (pinMode === 'setup_confirm') {
+          if (currentPin !== firstPin) {
+            showError('הקודים אינם תואמים, התחל מחדש');
+            setTimeout(() => resetModal('setup_enter'), 1200);
+            return;
+          }
+          try {
+            const res = await fetch('/api/parent/set-pin', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pin: currentPin, confirmPin: currentPin })
+            });
+            const data = await res.json();
+            if (data.success) {
+              sessionStorage.setItem('kids_tasker_parent_unlocked', '1');
+              closeModal();
+              window.location.href = '/parent';
+            } else {
+              showError(data.error || 'שגיאה בשמירת הקוד');
+            }
+          } catch (e) {
+            showError('שגיאת תקשורת, נסה שוב');
+          }
+        }
+      }
+
+      function onDigit(d) {
+        if (currentPin.length >= MAX_PIN) return;
+        currentPin += d;
+        clearError();
+        renderDots(currentPin.length);
+        if (currentPin.length === MAX_PIN) setTimeout(submitPin, 120);
+      }
+
+      function onDelete() {
+        currentPin = currentPin.slice(0, -1);
+        clearError();
+        renderDots(currentPin.length);
+      }
+
+      // Wire digit buttons
+      document.querySelectorAll('.pin-key[data-digit]').forEach(btn => {
+        btn.addEventListener('pointerdown', e => { e.preventDefault(); onDigit(btn.dataset.digit); });
+      });
+      delBtn.addEventListener('pointerdown', e => { e.preventDefault(); onDelete(); });
+      cancelBtn.addEventListener('pointerdown', e => { e.preventDefault(); closeModal(); });
+
+      // Physical keyboard support
+      document.addEventListener('keydown', e => {
+        if (modal.classList.contains('hidden')) return;
+        if (e.key >= '0' && e.key <= '9') { e.preventDefault(); onDigit(e.key); }
+        else if (e.key === 'Backspace') { e.preventDefault(); onDelete(); }
+        else if (e.key === 'Enter') { e.preventDefault(); submitPin(); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+      });
+
+      // Close on backdrop click
+      modal.addEventListener('pointerdown', e => { if (e.target === modal) closeModal(); });
+
+      // Expose open function globally
+      window.openPinModal = async function() {
+        try {
+          const res = await fetch('/api/parent/pin-status');
+          const data = await res.json();
+          resetModal(data.hasPin ? 'verify' : 'setup_enter');
+        } catch(e) {
+          resetModal('setup_enter');
+        }
+        modal.classList.remove('hidden');
+        renderDots(0);
+      };
+    })();
+
+    window.handleParentAccess = function(e) {
+      if (e) e.preventDefault();
+      window.openPinModal();
+    };
   </script>
 </body>
 </html>`);
@@ -1891,6 +2182,47 @@ app.get('/parent', (req, res) => {
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-full flex flex-col selection:bg-indigo-500 selection:text-white">
 
+  <!-- PIN Lock Overlay (shown if direct navigation without PIN) -->
+  <div id="parent-pin-overlay" class="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/98 backdrop-blur-sm hidden">
+    <div id="parent-pin-box" class="bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-xs flex flex-col items-center gap-5 select-none mx-4">
+      <div class="text-center">
+        <div class="text-4xl mb-2">🔒</div>
+        <h2 class="text-xl font-black text-white" id="pparent-pin-title">הזן קוד הורים</h2>
+        <p class="text-sm text-slate-400 mt-1" id="pparent-pin-subtitle">הכנס קוד PIN לגישה ללוח</p>
+      </div>
+      <div id="pparent-pin-dots" class="flex gap-3 items-center justify-center min-h-[2.5rem]"></div>
+      <p id="pparent-pin-error" class="text-rose-400 text-sm font-bold text-center hidden"></p>
+      <div class="grid grid-cols-3 gap-3 w-full">
+        <button class="pparent-pin-key" data-digit="1">1</button>
+        <button class="pparent-pin-key" data-digit="2">2</button>
+        <button class="pparent-pin-key" data-digit="3">3</button>
+        <button class="pparent-pin-key" data-digit="4">4</button>
+        <button class="pparent-pin-key" data-digit="5">5</button>
+        <button class="pparent-pin-key" data-digit="6">6</button>
+        <button class="pparent-pin-key" data-digit="7">7</button>
+        <button class="pparent-pin-key" data-digit="8">8</button>
+        <button class="pparent-pin-key" data-digit="9">9</button>
+        <a href="/" class="pparent-pin-key pparent-pin-secondary text-sm flex items-center justify-center no-underline">← חזור</a>
+        <button class="pparent-pin-key" data-digit="0">0</button>
+        <button id="pparent-pin-del" class="pparent-pin-key pparent-pin-del">⌫</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .pparent-pin-key {
+      height: 64px; border-radius: 16px; font-size: 1.5rem; font-weight: 800;
+      color: #fff; background: #1e293b; border: 1px solid #334155;
+      transition: background 0.1s, transform 0.08s; touch-action: manipulation;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; width: 100%;
+    }
+    .pparent-pin-key:active, .pparent-pin-key:focus-visible { background: #3730a3; transform: scale(0.93); outline: none; }
+    .pparent-pin-secondary { font-size: 0.85rem; background: #334155; text-decoration: none; }
+    .pparent-pin-del { font-size: 1.3rem; background: #450a0a; border-color: #7f1d1d; }
+    @keyframes pparentShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-10px)} 60%{transform:translateX(10px)} 80%{transform:translateX(-6px)} }
+    .pparent-shake { animation: pparentShake 0.38s ease; }
+  </style>
+
   <!-- Header -->
   <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-30 px-4 sm:px-8 py-4 shadow-md">
     <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
@@ -1916,6 +2248,11 @@ app.get('/parent', (req, res) => {
           <span>📱</span>
           <span>לוח ילדים (טאבלט)</span>
         </a>
+
+        <button onclick="lockParentDashboard()" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 shadow-sm transition flex items-center gap-1.5" title="נעל את לוח ההורים">
+          <span>🔒</span>
+          <span class="hidden sm:inline">נעל</span>
+        </button>
 
         <div id="status-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">
           <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
@@ -3343,6 +3680,104 @@ mode: single
 
     // Initial Load
     loadData();
+
+    // ==========================================
+    // Parent Dashboard PIN Protection
+    // ==========================================
+    (function initParentPinLock() {
+      const overlay = document.getElementById('parent-pin-overlay');
+      const pinBox = document.getElementById('parent-pin-box');
+      const pinDots = document.getElementById('pparent-pin-dots');
+      const pinError = document.getElementById('pparent-pin-error');
+      const delBtn = document.getElementById('pparent-pin-del');
+      const MAX_PIN = 6;
+      let currentPin = '';
+
+      function renderDots(len) {
+        pinDots.innerHTML = Array.from({ length: MAX_PIN }, (_, i) =>
+          \`<div class="w-4 h-4 rounded-full border-2 transition-all duration-150 \${i < len ? 'bg-indigo-400 border-indigo-400 scale-110' : 'bg-transparent border-slate-600'}"></div>\`
+        ).join('');
+      }
+
+      function showErr(msg) {
+        pinError.textContent = msg;
+        pinError.classList.remove('hidden');
+        pinBox.classList.add('pparent-shake');
+        setTimeout(() => pinBox.classList.remove('pparent-shake'), 400);
+      }
+
+      function clearErr() {
+        pinError.classList.add('hidden');
+        pinError.textContent = '';
+      }
+
+      async function submitParentPin() {
+        if (currentPin.length < 4) { showErr('יש להזין לפחות 4 ספרות'); return; }
+        try {
+          const res = await fetch('/api/parent/verify-pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin: currentPin })
+          });
+          const data = await res.json();
+          if (data.success) {
+            sessionStorage.setItem('kids_tasker_parent_unlocked', '1');
+            overlay.classList.add('hidden');
+          } else {
+            showErr(data.error || 'קוד שגוי, נסה שוב');
+            currentPin = '';
+            renderDots(0);
+          }
+        } catch (e) {
+          showErr('שגיאת תקשורת, נסה שוב');
+        }
+      }
+
+      function onDigit(d) {
+        if (currentPin.length >= MAX_PIN) return;
+        currentPin += d;
+        clearErr();
+        renderDots(currentPin.length);
+        if (currentPin.length === MAX_PIN) setTimeout(submitParentPin, 120);
+      }
+
+      function onDelete() {
+        currentPin = currentPin.slice(0, -1);
+        clearErr();
+        renderDots(currentPin.length);
+      }
+
+      document.querySelectorAll('.pparent-pin-key[data-digit]').forEach(btn => {
+        btn.addEventListener('pointerdown', e => { e.preventDefault(); onDigit(btn.dataset.digit); });
+      });
+      if (delBtn) delBtn.addEventListener('pointerdown', e => { e.preventDefault(); onDelete(); });
+
+      document.addEventListener('keydown', e => {
+        if (overlay.classList.contains('hidden')) return;
+        if (e.key >= '0' && e.key <= '9') { e.preventDefault(); onDigit(e.key); }
+        else if (e.key === 'Backspace') { e.preventDefault(); onDelete(); }
+        else if (e.key === 'Enter') { e.preventDefault(); submitParentPin(); }
+      });
+
+      async function checkPinRequired() {
+        if (sessionStorage.getItem('kids_tasker_parent_unlocked') === '1') return;
+        try {
+          const res = await fetch('/api/parent/pin-status');
+          const data = await res.json();
+          if (data.hasPin) {
+            overlay.classList.remove('hidden');
+            renderDots(0);
+          }
+        } catch (e) { /* fail open */ }
+      }
+
+      checkPinRequired();
+    })();
+
+    function lockParentDashboard() {
+      sessionStorage.removeItem('kids_tasker_parent_unlocked');
+      window.location.href = '/';
+    }
   </script>
 </body>
 </html>`);
