@@ -139,6 +139,82 @@
       </div>
     </div>
 
+    <!-- 2.5. TABLET PENDING APPROVAL VIEW (Access Blocked for Tablet) -->
+    <div id="view-tablet-pending" class="hidden flex-1 flex flex-col items-center justify-center py-10">
+      <div class="max-w-md w-full bg-slate-900 border border-amber-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+        <div class="w-16 h-16 mx-auto rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-3xl animate-pulse border border-amber-500/30">
+          📱
+        </div>
+        <div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-950/80 border border-amber-600/60 text-amber-300 mb-2">
+            <span>⏳</span>
+            <span>ממתין לאישור מנהל המשפחה</span>
+          </div>
+          <h2 class="text-2xl font-black text-white">הטאבלט ממתין לאישור</h2>
+          <p class="text-slate-400 text-xs mt-1">הטאבלט חובר בהצלחה עם קוד המשפחה, אך טרם אושר על ידי מנהל המשפחה</p>
+        </div>
+
+        <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400 font-bold">משפחה:</span>
+            <span id="tablet-family-display" class="font-mono text-indigo-300 font-bold"></span>
+          </div>
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400 font-bold">מזהה מכשיר:</span>
+            <span id="tablet-device-id-display" class="font-mono text-amber-300 font-bold"></span>
+          </div>
+        </div>
+
+        <div class="p-3 bg-rose-950/20 border border-rose-800/40 rounded-xl text-xs text-rose-300 text-right space-y-1">
+          <p class="font-bold flex items-center gap-1">
+            <span>🛡️</span>
+            <span>אבטחת מידע ופרטיות:</span>
+          </p>
+          <p class="text-slate-300">
+            הגישה ללוח המשימות ולשמות הילדים חסומה לחלוטין עד אשר מנהל המשפחה יאשר את הטאבלט בלוח ניהול ההורים (בלשונית "חברי משפחה והגדרות").
+          </p>
+        </div>
+
+        <div class="pt-2 space-y-2">
+          <p class="text-[11px] text-slate-500 animate-pulse">
+            ⚡ לוח המשימות ייפתח אוטומטית ברגע שהמנהל ילחץ "אשר טאבלט", ללא צורך בריענון!
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2.6. TABLET DISCONNECTED VIEW (Tablet Removed by Admin) -->
+    <div id="view-tablet-disconnected" class="hidden flex-1 flex flex-col items-center justify-center py-10">
+      <div class="max-w-md w-full bg-slate-900 border border-rose-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+        <div class="w-16 h-16 mx-auto rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl border border-rose-500/30">
+          🔒
+        </div>
+        <div>
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-950/80 border border-rose-600/60 text-rose-300 mb-2">
+            <span>🚫</span>
+            <span>מכשיר נותק</span>
+          </div>
+          <h2 class="text-2xl font-black text-white">הטאבלט נותק על ידי המנהל</h2>
+          <p class="text-slate-400 text-xs mt-1">מנהל המשפחה הסיר את הרשאת הצפייה ממכשיר זה והחיבור בוטל מידית</p>
+        </div>
+
+        <div class="p-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-xs text-slate-300 space-y-2">
+          <p>כדי לחבר את הטאבלט מחדש למשפחה:</p>
+          <ol class="list-decimal list-inside space-y-1 text-slate-400 text-right pr-2">
+            <li>פתח את לוח ניהול ההורים במכשיר המנהל</li>
+            <li>לחץ על <b>"חבר טאבלט"</b> וסרוק את קוד ה-QR העדכני</li>
+            <li>אשר את הטאבלט בלשונית <b>"חברי משפחה והגדרות"</b></li>
+          </ol>
+        </div>
+
+        <div class="pt-2">
+          <button onclick="window.location.href='/index.html'" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold rounded-xl text-xs border border-slate-700 transition">
+            חזרה למסך הראשי
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 3. NO FAMILY VIEW (User authenticated, but no family) -->
     <div id="view-no-family" class="hidden flex-1 flex flex-col items-center justify-center py-10">
       <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">

@@ -75,6 +75,8 @@ export function getDefaultFamilyData(familyName = 'משפחתנו') {
   return {
     name: familyName,
     tabletToken: generateTabletToken(),
+    tablets: [],
+    pendingTablets: [],
     createdAt: new Date().toISOString(),
     lastActiveDate: getTodayDateString(),
     children: [
@@ -795,3 +797,112 @@ export async function removeMember(familyId, targetUid) {
     updatedAt: serverTimestamp()
   }, { merge: true });
 }
+
+// Tablet: Register or refresh a tablet connection request
+export async function registerTabletRequest(familyId, tabletInfo) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  const tablets = data.tablets || [];
+  const pendingTablets = data.pendingTablets || [];
+
+  // If tablet is already approved
+  if (tablets.some(t => t.id === tabletInfo.id)) {
+    return { status: 'already_approved' };
+  }
+
+  // If already pending, update requestedAt / token
+  const existingPendingIndex = pendingTablets.findIndex(t => t.id === tabletInfo.id);
+  if (existingPendingIndex !== -1) {
+    pendingTablets[existingPendingIndex] = {
+      ...pendingTablets[existingPendingIndex],
+      token: tabletInfo.token || pendingTablets[existingPendingIndex].token || null,
+      requestedAt: new Date().toISOString()
+    };
+    await updateDoc(familyRef, { pendingTablets });
+    return { status: 'already_pending' };
+  }
+
+  // Otherwise append to pendingTablets
+  pendingTablets.push({
+    id: tabletInfo.id,
+    name: tabletInfo.name || 'טאבלט חדש',
+    token: tabletInfo.token || null,
+    requestedAt: new Date().toISOString(),
+    userAgent: tabletInfo.userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : '')
+  });
+
+  await updateDoc(familyRef, { pendingTablets });
+  return { status: 'requested' };
+}
+
+// Admin: Approve a pending tablet and move to active tablets
+export async function approveTablet(familyId, tabletId, customName = null) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  const pendingTablets = data.pendingTablets || [];
+  const tablets = data.tablets || [];
+
+  const pendingItem = pendingTablets.find(t => t.id === tabletId);
+  const updatedPending = pendingTablets.filter(t => t.id !== tabletId);
+
+  const updatedTablets = tablets.filter(t => t.id !== tabletId);
+  updatedTablets.push({
+    id: tabletId,
+    name: (customName && customName.trim()) ? customName.trim() : (pendingItem && pendingItem.name ? pendingItem.name : 'טאבלט סלון'),
+    token: pendingItem ? pendingItem.token : null,
+    approvedAt: new Date().toISOString(),
+    lastSeen: new Date().toISOString()
+  });
+
+  await updateDoc(familyRef, {
+    tablets: updatedTablets,
+    pendingTablets: updatedPending
+  });
+}
+
+// Admin: Reject a pending tablet request
+export async function rejectTablet(familyId, tabletId) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  const updatedPending = (data.pendingTablets || []).filter(t => t.id !== tabletId);
+  await updateDoc(familyRef, { pendingTablets: updatedPending });
+}
+
+// Admin: Remove an approved tablet (causes immediate real-time disconnection)
+export async function removeTablet(familyId, tabletId) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  const updatedTablets = (data.tablets || []).filter(t => t.id !== tabletId);
+  await updateDoc(familyRef, { tablets: updatedTablets });
+}
+
+// Admin: Update display name of an approved tablet
+export async function updateTabletName(familyId, tabletId, newName) {
+  if (!newName || !newName.trim()) return;
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  const tablets = (data.tablets || []).map(t => {
+    if (t.id === tabletId) {
+      return { ...t, name: newName.trim() };
+    }
+    return t;
+  });
+
+  await updateDoc(familyRef, { tablets });
+}
+

@@ -607,6 +607,55 @@
           </div>
         </div>
 
+        <!-- Section 2.5: Connected Tablets Management (Approved & Pending) -->
+        <div id="tablets-management-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div>
+              <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <span>📱</span>
+                <span>ניהול טאבלטים ומסכים מחוברים</span>
+                <span id="pending-tablets-count-badge" class="hidden text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold"></span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                ניהול מכשירים המורשים להציג את לוח הילדים. טאבלט חדש דורש אישור מנהל, והסרתו מנתקת אותו מידית.
+              </p>
+            </div>
+            <button onclick="window.openPairModal()" class="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow">
+              <span>➕</span>
+              <span>חבר טאבלט חדש (QR)</span>
+            </button>
+          </div>
+
+          <!-- Pending Tablets Subsection -->
+          <div id="pending-tablets-section" class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-amber-300 flex items-center gap-1.5">
+                <span>⏳</span>
+                <span>טאבלטים הממתינים לאישור מנהל</span>
+              </h3>
+              <span class="text-[11px] text-slate-400">יש לאשר כדי לאפשר לטאבלט לראות משימות</span>
+            </div>
+            <div id="pending-tablets-list" class="space-y-3">
+              <p class="text-slate-500 text-sm py-2">אין טאבלטים הממתינים לאישור כרגע ✨</p>
+            </div>
+          </div>
+
+          <!-- Active Tablets Subsection -->
+          <div class="space-y-3 pt-4 border-t border-slate-800">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-slate-200 flex items-center gap-1.5">
+                <span>📺</span>
+                <span>טאבלטים מאושרים ופעילים</span>
+                <span id="active-tablets-count-badge" class="hidden text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold"></span>
+              </h3>
+              <span class="text-[11px] text-slate-400">הסרת טאבלט מנתקת אותו מידית מלוח המשימות</span>
+            </div>
+            <div id="active-tablets-list" class="space-y-3">
+              <p class="text-slate-500 text-sm py-2">עדיין לא חוברו טאבלטים מאושרים. לחץ על "חבר טאבלט חדש" להצגת קוד ה-QR.</p>
+            </div>
+          </div>
+        </div>
+
         <!-- Section 3: Family Code & Share Link -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
           <h2 class="text-xl font-bold text-white flex items-center gap-2">
@@ -681,6 +730,16 @@
         </p>
         <p class="text-slate-300">
           הטאבלט יוכל אך ורק לצפות במשימות ולסמן ביצוע. הגישה לניהול הורים ולהגדרות נשארת חסומה ומחייבת כניסת מנהל.
+        </p>
+      </div>
+
+      <div class="p-2.5 bg-amber-950/40 border border-amber-800/50 rounded-xl text-[11px] text-amber-200 text-right space-y-1">
+        <p class="font-bold flex items-center gap-1">
+          <span>🛡️</span>
+          <span>אישור מנהל נדרש לאחר הסריקה:</span>
+        </p>
+        <p class="text-slate-300">
+          לאחר שהטאבלט סורק את הקוד, הוא ימתין לאישורך. לחץ <b>"אשר טאבלט ✔"</b> בלשונית "חברי משפחה והגדרות" כדי לפתוח את הלוח מידית.
         </p>
       </div>
 

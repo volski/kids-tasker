@@ -34,6 +34,10 @@ import {
   claimFamilyIfUnowned,
   getOrCreateTabletToken,
   regenerateTabletToken,
+  approveTablet,
+  rejectTablet,
+  removeTablet,
+  updateTabletName,
   ICON_LABELS 
 } from './db.js';
 
@@ -701,6 +705,139 @@ function renderFamilyTab(data) {
     }
   }
 
+  // 2.5. Pending Tablets Section
+  const pendingTablets = data.pendingTablets || [];
+  const pendingTabletsBadge = document.getElementById('pending-tablets-count-badge');
+  if (pendingTabletsBadge) {
+    if (pendingTablets.length > 0) {
+      pendingTabletsBadge.innerText = `${pendingTablets.length} ממתינים`;
+      pendingTabletsBadge.classList.remove('hidden');
+    } else {
+      pendingTabletsBadge.classList.add('hidden');
+    }
+  }
+
+  const pendingTabletsContainer = document.getElementById('pending-tablets-list');
+  if (pendingTabletsContainer) {
+    if (pendingTablets.length === 0) {
+      pendingTabletsContainer.innerHTML = '<p class="text-slate-500 text-sm py-2">אין טאבלטים הממתינים לאישור כרגע ✨</p>';
+    } else {
+      pendingTabletsContainer.innerHTML = pendingTablets.map(t => {
+        const reqTime = t.requestedAt ? new Date(t.requestedAt).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' }) : '';
+        return `
+          <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-amber-950/20 border border-amber-800/40 rounded-2xl">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center justify-center text-xl">
+                📱
+              </div>
+              <div>
+                <div class="font-bold text-white text-sm flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    id="pending-tablet-name-${t.id}" 
+                    value="${t.name || 'טאבלט סלון'}" 
+                    placeholder="שם הטאבלט (למשל: טאבלט סלון)..."
+                    class="bg-slate-800 border border-slate-700 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs text-white max-w-[170px]"
+                    title="שם המכשיר"
+                  >
+                  <span class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">ממתין לאישור</span>
+                </div>
+                <div class="text-[11px] text-slate-400 font-mono mt-0.5">
+                  <span>מזהה מכשיר: ${t.id}</span>
+                  ${reqTime ? `<span class="mx-1">•</span><span>ביקש: ${reqTime}</span>` : ''}
+                </div>
+              </div>
+            </div>
+
+            ${isAdmin ? `
+              <div class="flex items-center gap-2">
+                <button 
+                  onclick="window.handleApproveTablet('${t.id}')" 
+                  class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-1"
+                >
+                  <span>✔</span>
+                  <span>אשר טאבלט</span>
+                </button>
+                <button 
+                  onclick="window.handleRejectTablet('${t.id}')" 
+                  class="px-2.5 py-1.5 bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-200 border border-slate-700 rounded-xl text-xs font-bold transition"
+                >
+                  דחה ✖
+                </button>
+              </div>
+            ` : `
+              <span class="text-xs text-slate-500 italic">ממתין לאישור מנהל המשפחה</span>
+            `}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // 2.6. Active Approved Tablets Section
+  const activeTablets = data.tablets || [];
+  const activeTabletsBadge = document.getElementById('active-tablets-count-badge');
+  if (activeTabletsBadge) {
+    if (activeTablets.length > 0) {
+      activeTabletsBadge.innerText = `${activeTablets.length} פעילים`;
+      activeTabletsBadge.classList.remove('hidden');
+    } else {
+      activeTabletsBadge.classList.add('hidden');
+    }
+  }
+
+  const activeTabletsContainer = document.getElementById('active-tablets-list');
+  if (activeTabletsContainer) {
+    if (activeTablets.length === 0) {
+      activeTabletsContainer.innerHTML = '<p class="text-slate-500 text-sm py-2">עדיין לא חוברו טאבלטים מאושרים. לחץ על "חבר טאבלט חדש" להצגת קוד ה-QR.</p>';
+    } else {
+      activeTabletsContainer.innerHTML = activeTablets.map(t => {
+        const approvedTime = t.approvedAt ? new Date(t.approvedAt).toLocaleDateString('he-IL', { dateStyle: 'short' }) : '';
+        return `
+          <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-slate-800/40 border border-slate-800 rounded-2xl hover:border-slate-700 transition">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xl">
+                📱
+              </div>
+              <div>
+                <div class="font-bold text-white text-sm flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    value="${t.name || 'טאבלט'}" 
+                    onchange="window.handleUpdateTabletName('${t.id}', this.value)"
+                    class="bg-transparent border-b border-transparent hover:border-slate-600 focus:border-indigo-500 text-sm font-bold text-white px-1 py-0.5 transition"
+                    title="לחץ לעריכת שם הטאבלט"
+                  >
+                  <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1">
+                    <span>✔</span>
+                    <span>מורשה</span>
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-400 font-mono mt-0.5">
+                  <span>מזהה מכשיר: ${t.id}</span>
+                  ${approvedTime ? `<span class="mx-1">•</span><span>אושר: ${approvedTime}</span>` : ''}
+                </div>
+              </div>
+            </div>
+
+            ${isAdmin ? `
+              <div class="flex items-center gap-2">
+                <button 
+                  onclick="window.handleRemoveTablet('${t.id}', '${(t.name || 'טאבלט').replace(/'/g, "\\'")}')" 
+                  class="px-3 py-1.5 bg-rose-950/50 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                  title="נתק טאבלט זה מיד (יחסם ללא עיכוב)"
+                >
+                  <span>🗑️</span>
+                  <span>נתק והסר</span>
+                </button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
   // 3. Family Code badge
   const codeBadge = document.getElementById('family-code-badge');
   if (codeBadge) codeBadge.innerText = data.id || currentFamilyId;
@@ -791,6 +928,50 @@ window.handleRemoveMember = async function(targetUid, name) {
     showToast(e.message, true);
   }
 };
+
+// Tablet Handlers
+window.handleApproveTablet = async function(tabletId) {
+  try {
+    const input = document.getElementById(`pending-tablet-name-${tabletId}`);
+    const customName = input?.value?.trim() || 'טאבלט';
+    showToast('מאשר טאבלט...');
+    await approveTablet(currentFamilyId, tabletId, customName);
+    showToast(`הטאבלט "${customName}" אושר בהצלחה! הלוח נפתח בטאבלט 🎉`);
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
+window.handleRejectTablet = async function(tabletId) {
+  if (!confirm('האם לדחות בקשת חיבור זו של הטאבלט?')) return;
+  try {
+    await rejectTablet(currentFamilyId, tabletId);
+    showToast('בקשת הטאבלט נדחתה');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
+window.handleRemoveTablet = async function(tabletId, tabletName) {
+  if (!confirm(`האם לנתק ולהסיר את "${tabletName}" מרשימת הטאבלטים המאושרים?\nהטאבלט ינותק מידית ולוח המשימות ייחסם.`)) return;
+  try {
+    await removeTablet(currentFamilyId, tabletId);
+    showToast(`הטאבלט "${tabletName}" נותק והוסר בהצלחה! 🔒`);
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
+window.handleUpdateTabletName = async function(tabletId, newName) {
+  if (!newName || !newName.trim()) return;
+  try {
+    await updateTabletName(currentFamilyId, tabletId, newName.trim());
+    showToast('שם הטאבלט עודכן בהצלחה');
+  } catch (e) {
+    showToast(e.message, true);
+  }
+};
+
 
 let historyUnsubscribe = null;
 function loadHistory(dateString) {
