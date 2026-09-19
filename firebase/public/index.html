@@ -198,6 +198,14 @@
           <p class="text-[11px] text-slate-500 animate-pulse">
             ⚡ לוח המשימות ייפתח אוטומטית ברגע שהמנהל ילחץ "אשר טאבלט", ללא צורך בריענון!
           </p>
+          <button 
+            type="button" 
+            onclick="window.recheckTabletApproval()" 
+            class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white font-bold rounded-xl text-xs border border-slate-700 transition flex items-center justify-center gap-1.5 shadow"
+          >
+            <span>🔄</span>
+            <span>בדוק אישור מחדש עכשיו</span>
+          </button>
         </div>
       </div>
     </div>
@@ -294,7 +302,7 @@
   <!-- Tablet Toast Notification -->
   <div id="tablet-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 bg-slate-800 border border-slate-700 text-white font-bold rounded-2xl shadow-2xl opacity-0 pointer-events-none transition-opacity duration-300 z-50 text-center text-sm"></div>
 
-  <!-- Modular Script -->
-  <script type="module" src="/js/tablet.js"></script>
+  <!-- Modular Script (Cache-busted) -->
+  <script type="module" src="/js/tablet.js?v=2.2.0"></script>
 </body>
 </html>

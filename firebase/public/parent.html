@@ -394,6 +394,7 @@
         <button onclick="window.switchTab('family')" id="tab-btn-family" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
           <span>👨‍👩‍👧‍👦</span>
           <span>חברי משפחה והגדרות</span>
+          <span id="tab-family-notification-badge" class="hidden text-[10px] bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full font-black animate-pulse shadow"></span>
         </button>
       </div>
     </div>
@@ -776,7 +777,7 @@
   <!-- Toast Notification -->
   <div id="toast" class="hidden"></div>
 
-  <!-- Modular Script -->
-  <script type="module" src="/js/parent.js"></script>
+  <!-- Modular Script (Cache-busted) -->
+  <script type="module" src="/js/parent.js?v=2.2.0"></script>
 </body>
 </html>

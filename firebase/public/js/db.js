@@ -461,6 +461,8 @@ export async function createFamilyForUser(uid, userMeta, familyName, childrenNam
     ],
     pendingMembers: [],
     tabletToken: generateTabletToken(),
+    tablets: [],
+    pendingTablets: [],
     createdAt: new Date().toISOString(),
     lastActiveDate: getTodayDateString(),
     children: validChildren,
@@ -519,7 +521,9 @@ export async function claimFamilyIfUnowned(familyId, user) {
         admins: [user.uid],
         parents: [user.uid],
         members: [adminMember],
-        tabletToken: data.tabletToken || generateTabletToken()
+        tabletToken: data.tabletToken || generateTabletToken(),
+        tablets: data.tablets || [],
+        pendingTablets: data.pendingTablets || []
       });
       // Update user profile to approved admin
       const userRef = doc(db, 'users', user.uid);
@@ -800,9 +804,14 @@ export async function removeMember(familyId, targetUid) {
 
 // Tablet: Register or refresh a tablet connection request
 export async function registerTabletRequest(familyId, tabletInfo) {
-  const familyRef = doc(db, 'families', familyId);
+  const cleanId = (familyId || '').trim();
+  console.log(`[Tablet Registration] Registering tablet ${tabletInfo.id} for family "${cleanId}"...`);
+  const familyRef = doc(db, 'families', cleanId);
   const snap = await getDoc(familyRef);
-  if (!snap.exists()) throw new Error('Family not found');
+  if (!snap.exists()) {
+    console.error(`[Tablet Registration] Family "${cleanId}" not found in Firestore!`);
+    throw new Error('Family not found');
+  }
 
   const data = snap.data();
   const tablets = data.tablets || [];
@@ -810,6 +819,7 @@ export async function registerTabletRequest(familyId, tabletInfo) {
 
   // If tablet is already approved
   if (tablets.some(t => t.id === tabletInfo.id)) {
+    console.log(`[Tablet Registration] Device ${tabletInfo.id} is already in approved tablets list.`);
     return { status: 'already_approved' };
   }
 
@@ -822,6 +832,7 @@ export async function registerTabletRequest(familyId, tabletInfo) {
       requestedAt: new Date().toISOString()
     };
     await updateDoc(familyRef, { pendingTablets });
+    console.log(`[Tablet Registration] Updated existing pending request for ${tabletInfo.id}.`);
     return { status: 'already_pending' };
   }
 
@@ -835,6 +846,7 @@ export async function registerTabletRequest(familyId, tabletInfo) {
   });
 
   await updateDoc(familyRef, { pendingTablets });
+  console.log(`[Tablet Registration] Successfully added ${tabletInfo.id} to pendingTablets in family "${cleanId}".`);
   return { status: 'requested' };
 }
 

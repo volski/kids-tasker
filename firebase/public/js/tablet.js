@@ -1,11 +1,10 @@
-// Kids Tablet Controller (Modular Firebase Edition - Authenticated)
 import { 
   getStoredFamilyId, 
   setStoredFamilyId, 
   loginWithGoogle, 
   logoutUser, 
   subscribeToAuth 
-} from './firebase-config.js';
+} from './firebase-config.js?v=2.2.0';
 import { 
   subscribeToFamily, 
   toggleTask, 
@@ -15,7 +14,7 @@ import {
   cancelJoinRequest,
   claimFamilyIfUnowned,
   registerTabletRequest
-} from './db.js';
+} from './db.js?v=2.2.0';
 
 // DOM Elements
 const authLanding = document.getElementById('auth-landing');
@@ -458,6 +457,8 @@ function loadFamilyBoard(familyId, tokenCandidate = null) {
       else previewBadge.classList.add('hidden');
     }
 
+    console.log(`[Tablet Gate] Device: ${deviceId}, Family: ${familyId}, isApproved: ${isApprovedTablet}, isPending: ${isPendingTablet}, isPreview: ${isParentPreview}, validToken: ${isValidTabletToken}`);
+
     // STRICT TABLET SECURITY GATEKEEPER:
     // If NOT an explicit parent preview, this screen is in TABLET MODE.
     // The previous allowed method (Google login or unapproved token) is STRICTLY REMOVED.
@@ -633,9 +634,32 @@ function init() {
   });
 }
 
+// Recheck tablet approval action
+window.recheckTabletApproval = async function() {
+  showToast('בודק אישור מנהל...');
+  const activeToken = getActiveTabletToken();
+  if (currentFamilyId && currentFamilyId !== 'demo-family') {
+    try {
+      const deviceId = getOrCreateDeviceId();
+      await registerTabletRequest(currentFamilyId, {
+        id: deviceId,
+        token: activeToken,
+        name: 'טאבלט חדש'
+      });
+    } catch (e) {
+      console.warn('[Recheck] Notice:', e);
+    }
+    loadFamilyBoard(currentFamilyId, activeToken);
+    showToast('הנתונים עודכנו מול השרת ✨');
+  } else {
+    showToast('חסר קוד משפחה או טוקן', true);
+  }
+};
+
 // Run init immediately if DOM is already ready (top-level await support)
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
   init();
 }
+
