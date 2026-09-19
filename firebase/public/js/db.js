@@ -423,7 +423,19 @@ export async function createFamilyForUser(uid, userMeta, familyName, childrenNam
     id: familyId,
     name: familyName ? familyName.trim() : 'המשפחה שלנו',
     ownerUid: uid,
+    admins: [uid],
     parents: [uid],
+    members: [
+      {
+        uid: uid,
+        email: userMeta.email || '',
+        displayName: userMeta.displayName || '',
+        photoURL: userMeta.photoURL || '',
+        role: 'admin',
+        joinedAt: new Date().toISOString()
+      }
+    ],
+    pendingMembers: [],
     createdAt: new Date().toISOString(),
     lastActiveDate: getTodayDateString(),
     children: validChildren,
@@ -451,39 +463,241 @@ export async function createFamilyForUser(uid, userMeta, familyName, childrenNam
     displayName: userMeta.displayName || '',
     photoURL: userMeta.photoURL || '',
     familyId: familyId,
-    role: 'parent',
+    role: 'admin',
+    status: 'approved',
     updatedAt: serverTimestamp()
   }, { merge: true });
 
   return { familyId, familyData };
 }
 
-// Join an existing family with a code
-export async function joinFamilyWithCode(uid, userMeta, familyId) {
-  const familyRef = doc(db, 'families', familyId);
+// Real-time listener for user profile
+export function subscribeToUserProfile(uid, callback) {
+  const userRef = doc(db, 'users', uid);
+  return onSnapshot(userRef, snap => {
+    if (snap.exists()) {
+      callback(snap.data());
+    } else {
+      callback(null);
+    }
+  }, err => {
+    console.error('[UserProfile] Subscription error:', err);
+  });
+}
+
+// Request to join an existing family with code (Requires Admin Approval)
+export async function requestJoinFamily(uid, userMeta, familyId) {
+  const cleanId = familyId.trim();
+  const familyRef = doc(db, 'families', cleanId);
   const snap = await getDoc(familyRef);
   if (!snap.exists()) {
-    throw new Error(`קוד משפחה "${familyId}" לא נמצא. בדוק את הקוד ונסה שוב.`);
+    throw new Error(`קוד משפחה "${cleanId}" לא נמצא. בדוק את הקוד ונסה שוב.`);
   }
 
   const data = snap.data();
-  const parents = data.parents || [];
-  if (!parents.includes(uid)) {
-    parents.push(uid);
-    await updateDoc(familyRef, { parents });
+  const pending = data.pendingMembers || [];
+  const members = data.members || [];
+
+  // Check if already approved
+  if (members.some(m => m.uid === uid)) {
+    // Already a member
+    const userRef = doc(db, 'users', uid);
+    await setDoc(userRef, {
+      familyId: cleanId,
+      status: 'approved'
+    }, { merge: true });
+    return { status: 'already_approved', familyData: data };
   }
 
-  // Link in user profile
+  // Add to pendingMembers if not already there
+  const existingIdx = pending.findIndex(p => p.uid === uid);
+  const candidate = {
+    uid: uid,
+    email: userMeta.email || '',
+    displayName: userMeta.displayName || '',
+    photoURL: userMeta.photoURL || '',
+    requestedAt: new Date().toISOString()
+  };
+
+  if (existingIdx >= 0) {
+    pending[existingIdx] = candidate;
+  } else {
+    pending.push(candidate);
+  }
+
+  await updateDoc(familyRef, { pendingMembers: pending });
+
+  // Update user profile to pending state
   const userRef = doc(db, 'users', uid);
   await setDoc(userRef, {
     uid: uid,
     email: userMeta.email || '',
     displayName: userMeta.displayName || '',
     photoURL: userMeta.photoURL || '',
-    familyId: familyId,
-    role: 'parent',
+    pendingFamilyId: cleanId,
+    status: 'pending',
     updatedAt: serverTimestamp()
   }, { merge: true });
 
-  return { familyId, familyData: data };
+  return { status: 'pending', familyName: data.name || cleanId };
+}
+
+// Cancel a pending join request
+export async function cancelJoinRequest(uid, familyId) {
+  try {
+    const familyRef = doc(db, 'families', familyId);
+    const snap = await getDoc(familyRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      const pending = (data.pendingMembers || []).filter(p => p.uid !== uid);
+      await updateDoc(familyRef, { pendingMembers: pending });
+    }
+  } catch (e) {
+    console.warn('[CancelJoin] Family update notice:', e.message);
+  }
+
+  const userRef = doc(db, 'users', uid);
+  await setDoc(userRef, {
+    pendingFamilyId: null,
+    status: null,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+// Admin: Approve a pending member
+export async function approveMember(familyId, targetUid, role = 'parent') {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  const pending = data.pendingMembers || [];
+  const candidate = pending.find(p => p.uid === targetUid);
+
+  const updatedPending = pending.filter(p => p.uid !== targetUid);
+  const members = data.members || [];
+  const parents = data.parents || [];
+  const admins = data.admins || [];
+
+  const newMember = {
+    uid: targetUid,
+    email: candidate ? candidate.email : '',
+    displayName: candidate ? candidate.displayName : '',
+    photoURL: candidate ? candidate.photoURL : '',
+    role: role, // 'parent' or 'admin'
+    joinedAt: new Date().toISOString()
+  };
+
+  // Remove previous entry if exists
+  const existingMemberIdx = members.findIndex(m => m.uid === targetUid);
+  if (existingMemberIdx >= 0) {
+    members[existingMemberIdx] = newMember;
+  } else {
+    members.push(newMember);
+  }
+
+  if (!parents.includes(targetUid)) parents.push(targetUid);
+  if (role === 'admin' && !admins.includes(targetUid)) admins.push(targetUid);
+
+  await updateDoc(familyRef, {
+    pendingMembers: updatedPending,
+    members: members,
+    parents: parents,
+    admins: admins
+  });
+
+  // Activate user profile
+  const userRef = doc(db, 'users', targetUid);
+  await setDoc(userRef, {
+    familyId: familyId,
+    pendingFamilyId: null,
+    role: role,
+    status: 'approved',
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+// Admin: Reject a pending member
+export async function rejectMember(familyId, targetUid) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (snap.exists()) {
+    const data = snap.data();
+    const updatedPending = (data.pendingMembers || []).filter(p => p.uid !== targetUid);
+    await updateDoc(familyRef, { pendingMembers: updatedPending });
+  }
+
+  // Update rejected user profile
+  const userRef = doc(db, 'users', targetUid);
+  await setDoc(userRef, {
+    pendingFamilyId: null,
+    status: 'rejected',
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+// Admin: Update an existing member's role (parent <-> admin)
+export async function updateMemberRole(familyId, targetUid, newRole) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  const members = data.members || [];
+  const member = members.find(m => m.uid === targetUid);
+  if (!member) throw new Error('Member not found');
+
+  // Prevent demoting original owner
+  if (data.ownerUid === targetUid && newRole !== 'admin') {
+    throw new Error('לא ניתן לבטל הרשאת מנהל למקים המשפחה הראשי');
+  }
+
+  member.role = newRole;
+  let admins = data.admins || [];
+  if (newRole === 'admin') {
+    if (!admins.includes(targetUid)) admins.push(targetUid);
+  } else {
+    admins = admins.filter(id => id !== targetUid);
+  }
+
+  await updateDoc(familyRef, {
+    members: members,
+    admins: admins
+  });
+
+  const userRef = doc(db, 'users', targetUid);
+  await setDoc(userRef, {
+    role: newRole,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+}
+
+// Admin: Remove a member from the family
+export async function removeMember(familyId, targetUid) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) throw new Error('Family not found');
+
+  const data = snap.data();
+  if (data.ownerUid === targetUid) {
+    throw new Error('לא ניתן להסיר את מקים המשפחה הראשי');
+  }
+
+  const members = (data.members || []).filter(m => m.uid !== targetUid);
+  const parents = (data.parents || []).filter(id => id !== targetUid);
+  const admins = (data.admins || []).filter(id => id !== targetUid);
+
+  await updateDoc(familyRef, {
+    members: members,
+    parents: parents,
+    admins: admins
+  });
+
+  const userRef = doc(db, 'users', targetUid);
+  await setDoc(userRef, {
+    familyId: null,
+    status: null,
+    role: null,
+    updatedAt: serverTimestamp()
+  }, { merge: true });
 }

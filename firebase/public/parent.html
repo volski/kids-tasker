@@ -207,7 +207,32 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- 3. MAIN PARENT DASHBOARD (Authenticated)   -->
+  <!-- 3. PENDING APPROVAL WAITING SCREEN         -->
+  <!-- ========================================== -->
+  <div id="view-pending-approval" class="hidden flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
+    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+      <div class="w-16 h-16 mx-auto rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-3xl animate-pulse">
+        ⏳
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-white">בקשת ההצטרפות נשלחה!</h2>
+        <p class="text-slate-400 text-sm mt-1">ממתין לאישור מנהל המשפחה לפתיחת הלוח</p>
+      </div>
+      <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700 space-y-1">
+        <p class="text-xs text-slate-400 font-bold">קוד המשפחה שאליה ביקשת להצטרף:</p>
+        <p id="pending-family-code-display" class="font-mono text-indigo-300 font-bold text-lg"></p>
+      </div>
+      <div class="p-3 bg-slate-800/40 rounded-xl border border-slate-800 text-xs text-slate-400">
+        💡 ברגע שמנהל המשפחה יאשר את הבקשה שלך, הלוח ייפתח כאן אוטומטית ללא צורך בריענון!
+      </div>
+      <button onclick="window.triggerCancelJoin()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-rose-300 font-bold rounded-xl text-xs border border-slate-700 transition">
+        ביטול בקשת הצטרפות
+      </button>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 4. MAIN PARENT DASHBOARD (Authenticated)   -->
   <!-- ========================================== -->
   <div id="app-dashboard" class="hidden flex-1 flex flex-col">
     <!-- Header -->
@@ -286,7 +311,7 @@
         </button>
         <button onclick="window.switchTab('family')" id="tab-btn-family" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
           <span>👨‍👩‍👧‍👦</span>
-          <span>הגדרות משפחה</span>
+          <span>חברי משפחה והגדרות</span>
         </button>
       </div>
     </div>
@@ -430,27 +455,85 @@
 
       <!-- Tab 5: Family & Multi-Tenant Settings -->
       <div id="view-family" class="hidden space-y-6">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+        
+        <!-- Section 1: Pending Member Requests (Requires Admin Approval) -->
+        <div id="pending-members-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <span>⏳</span>
+                <span>בקשות הצטרפות ממתינות לאישור</span>
+                <span id="pending-count-badge" class="hidden text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold"></span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                משתמשים חדשים שמזינים את קוד המשפחה נדרשים לקבל אישור ממנהל המשפחה לפני גישה ללוח
+              </p>
+            </div>
+          </div>
+          <div id="pending-members-list" class="space-y-3">
+            <p class="text-slate-500 text-sm py-2">אין בקשות הצטרפות ממתינות כרגע ✨</p>
+          </div>
+        </div>
+
+        <!-- Section 2: Active Family Members -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <span>👥</span>
+                <span>חברי המשפחה הפעילים</span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                הורים ומנהלים המורשים לצפות ולנהל את לוח המשימות
+              </p>
+            </div>
+          </div>
+          <div id="active-members-list" class="space-y-3">
+            <!-- Injected dynamically via parent.js -->
+          </div>
+        </div>
+
+        <!-- Section 3: Family Code & Share Link -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
           <h2 class="text-xl font-bold text-white flex items-center gap-2">
-            <span>👨‍👩‍👧‍👦</span>
-            <span>החלפת מרחב עבודה משפחתי (Family Workspace)</span>
+            <span>🔗</span>
+            <span>קוד המשפחה ושיתוף</span>
           </h2>
           <p class="text-sm text-slate-400">
-            קוד המשפחה הנוכחי שלכם הוא: <b id="family-code-badge" class="font-mono text-indigo-300"></b>.
+            שתף את קוד המשפחה עם בן/בת הזוג כדי שיוכלו לבקש להצטרף ללוח
           </p>
 
           <div class="flex flex-wrap gap-3 items-center">
+            <div class="flex items-center gap-2 bg-slate-800 px-4 py-2.5 rounded-xl border border-slate-700 flex-1 min-w-[200px]">
+              <span class="text-xs text-slate-400 font-bold">קוד משפחה:</span>
+              <span id="family-code-badge" class="font-mono text-indigo-300 font-bold text-base"></span>
+            </div>
+            <button onclick="window.copyFamilyCode()" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition">
+              העתק קוד
+            </button>
+            <button onclick="window.openPairModal()" class="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm transition flex items-center gap-1.5">
+              <span>📱</span>
+              <span>חיבור טאבלט (QR)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 4: Switch Family Workspace -->
+        <div class="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 space-y-3">
+          <h3 class="text-base font-bold text-slate-300">החלפת מרחב עבודה משפחתי</h3>
+          <div class="flex flex-wrap gap-2.5">
             <input 
               type="text" 
               id="active-family-id" 
               placeholder="הזן קוד משפחה אחר..."
-              class="flex-1 min-w-[240px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white"
+              class="flex-1 min-w-[200px] bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
             >
-            <button onclick="window.switchFamily()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow transition">
-              החלף משפחה
+            <button onclick="window.switchFamily()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold rounded-xl text-xs transition">
+              החלף
             </button>
           </div>
         </div>
+
       </div>
 
     </main>
