@@ -1,11 +1,10 @@
-// Parent Dashboard & Onboarding Controller (Modular Firebase Edition)
 import { 
   getStoredFamilyId, 
   setStoredFamilyId, 
   loginWithGoogle, 
   logoutUser, 
   subscribeToAuth 
-} from './firebase-config.js';
+} from './firebase-config.js?v=2.2.0';
 import { 
   subscribeToFamily, 
   subscribeToDailyHistory, 
@@ -40,7 +39,7 @@ import {
   updateTabletName,
   revokeAllTablets,
   ICON_LABELS 
-} from './db.js';
+} from './db.js?v=2.2.0';
 
 let currentFamilyId = getStoredFamilyId();
 let currentData = null;
@@ -48,6 +47,7 @@ let currentTab = 'status';
 let currentUser = null;
 let familyUnsubscribe = null;
 let userProfileUnsubscribe = null;
+let lastSeenPendingTablets = null;
 
 // DOM View Containers
 const authLanding = document.getElementById('auth-landing');
@@ -591,8 +591,28 @@ function renderFamilyTab(data) {
 
   const pendingList = data.pendingMembers || [];
   const membersList = data.members || [];
+  const pendingTablets = data.pendingTablets || [];
+  const activeTablets = data.tablets || [];
 
-  // Update Pending Count Badge
+  // Update Navigation Tab 5 Notification Badge (combines pending members & pending tablets)
+  const tabFamilyBadge = document.getElementById('tab-family-notification-badge');
+  const totalPending = pendingList.length + pendingTablets.length;
+  if (tabFamilyBadge) {
+    if (totalPending > 0) {
+      tabFamilyBadge.innerText = `${totalPending}`;
+      tabFamilyBadge.classList.remove('hidden');
+    } else {
+      tabFamilyBadge.classList.add('hidden');
+    }
+  }
+
+  // Toast alert if a new tablet just connected and requested approval
+  if (lastSeenPendingTablets !== null && pendingTablets.length > lastSeenPendingTablets) {
+    showToast('📱 טאבלט חדש ממתין לאישורך בלשונית "חברי משפחה והגדרות"!');
+  }
+  lastSeenPendingTablets = pendingTablets.length;
+
+  // Update Pending Count Badge inside Tab 5
   const countBadge = document.getElementById('pending-count-badge');
   if (countBadge) {
     if (pendingList.length > 0) {
@@ -708,7 +728,6 @@ function renderFamilyTab(data) {
   }
 
   // 2.5. Pending Tablets Section
-  const pendingTablets = data.pendingTablets || [];
   const pendingTabletsBadge = document.getElementById('pending-tablets-count-badge');
   if (pendingTabletsBadge) {
     if (pendingTablets.length > 0) {
@@ -777,7 +796,6 @@ function renderFamilyTab(data) {
   }
 
   // 2.6. Active Approved Tablets Section
-  const activeTablets = data.tablets || [];
   const activeTabletsBadge = document.getElementById('active-tablets-count-badge');
   if (activeTabletsBadge) {
     if (activeTablets.length > 0) {
