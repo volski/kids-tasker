@@ -326,6 +326,9 @@
           <div>
             <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
               <span id="dashboard-family-name">לוח ניהול הורים</span>
+              <button onclick="window.openEditFamilyNamePrompt()" class="text-xs text-slate-400 hover:text-indigo-300 p-1 transition" title="ערוך שם משפחה">
+                ✏️
+              </button>
               <span id="family-id-display" class="text-xs font-semibold text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2 py-0.5 rounded-full"></span>
             </h1>
             <p class="text-xs text-slate-400 font-medium">מעקב משימות, עריכה, יומן היסטוריה ואינטגרציית בית חכם</p>
@@ -534,6 +537,38 @@
 
       <!-- Tab 5: Family & Multi-Tenant Settings -->
       <div id="view-family" class="hidden space-y-6">
+
+        <!-- Section 0: Edit Family Name -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div>
+              <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <span>🏠</span>
+                <span>שם המשפחה</span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-1">
+                ערוך את שם המשפחה כפי שמוצג בראש לוח ההורים ובלוח המשימות של הטאבלט
+              </p>
+            </div>
+          </div>
+          <form onsubmit="window.handleUpdateFamilyName(event)" class="flex flex-wrap gap-2.5">
+            <input 
+              type="text" 
+              id="edit-family-name-input" 
+              placeholder="שם המשפחה (למשל: משפחת כהן)..." 
+              required
+              class="flex-1 min-w-[220px] bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500"
+            >
+            <button 
+              type="submit" 
+              id="btn-save-family-name"
+              class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition flex items-center gap-1.5 shadow"
+            >
+              <span>💾</span>
+              <span>שמור שם</span>
+            </button>
+          </form>
+        </div>
         
         <!-- Section 1: Pending Member Requests (Requires Admin Approval) -->
         <div id="pending-members-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">

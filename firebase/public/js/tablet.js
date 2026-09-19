@@ -12,7 +12,8 @@ import {
   getTodayDateString,
   subscribeToUserProfile,
   requestJoinFamily,
-  cancelJoinRequest
+  cancelJoinRequest,
+  claimFamilyIfUnowned
 } from './db.js';
 
 // DOM Elements
@@ -380,10 +381,19 @@ function loadFamilyBoard(familyId) {
   updateConnectionStatus(false);
   showView('loading');
 
-  familyUnsubscribe = subscribeToFamily(familyId, data => {
+  familyUnsubscribe = subscribeToFamily(familyId, async data => {
+    const currentUid = currentUser ? currentUser.uid : null;
+
+    // Auto-claim legacy or unowned family for current user
+    if (!data.ownerUid && (!data.admins || data.admins.length === 0) && currentUser) {
+      await claimFamilyIfUnowned(familyId, currentUser);
+      data.ownerUid = currentUid;
+      data.admins = [currentUid];
+      data.parents = [currentUid];
+    }
+
     // STRICT SECURITY GATEKEEPER:
     // Verify that currentUser is actually an approved member or owner of this family!
-    const currentUid = currentUser ? currentUser.uid : null;
     const isApproved = data.ownerUid === currentUid || 
                        (data.admins || []).includes(currentUid) || 
                        (data.parents || []).includes(currentUid) || 
@@ -448,31 +458,28 @@ function init() {
     // Subscribe to user profile in real-time
     if (userProfileUnsubscribe) userProfileUnsubscribe();
     userProfileUnsubscribe = subscribeToUserProfile(user.uid, profile => {
+      // 1. If explicitly pending, block access immediately
       if (profile && profile.status === 'pending') {
-        // User requested to join and is waiting for admin approval
         if (pendingFamilyCodeDisplay) {
           pendingFamilyCodeDisplay.innerText = profile.pendingFamilyId || '';
         }
         showView('pending');
-      } else if (profile && profile.status === 'approved' && profile.familyId) {
-        // User is an approved family member! Load family board
-        loadFamilyBoard(profile.familyId);
-      } else if (urlFamily) {
-        // User has no active family, but opened a pairing link with ?family=...
-        showToast('שולח בקשת הצטרפות למשפחה...');
-        requestJoinFamily(user.uid, user, urlFamily).then(res => {
-          if (res.status === 'already_approved') {
-            loadFamilyBoard(urlFamily);
-          } else {
-            if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = urlFamily;
-            showView('pending');
-          }
-        }).catch(err => {
-          showToast(err.message, true);
-          showView('no-family');
-        });
+        return;
+      }
+
+      // 2. Resolve family ID to load
+      const storedId = getStoredFamilyId();
+      const targetFamilyId = (profile && profile.familyId) 
+        ? profile.familyId 
+        : (urlFamily && urlFamily.trim())
+          ? urlFamily.trim()
+          : (storedId && storedId !== 'demo-family')
+            ? storedId
+            : null;
+
+      if (targetFamilyId) {
+        loadFamilyBoard(targetFamilyId);
       } else {
-        // User has no family assigned
         showView('no-family');
       }
     });

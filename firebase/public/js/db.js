@@ -378,6 +378,17 @@ export async function saveHomeAssistantConfig(familyId, config) {
   });
 }
 
+// Update Family Name
+export async function updateFamilyName(familyId, newName) {
+  const cleanName = (newName || '').trim();
+  if (!cleanName) throw new Error('שם המשפחה אינו יכול להיות ריק');
+  const familyRef = doc(db, 'families', familyId);
+  await updateDoc(familyRef, {
+    name: cleanName
+  });
+  return cleanName;
+}
+
 // ==========================================
 // User Profile & Onboarding Operations
 // ==========================================
@@ -469,6 +480,50 @@ export async function createFamilyForUser(uid, userMeta, familyName, childrenNam
   }, { merge: true });
 
   return { familyId, familyData };
+}
+
+// Auto-claim unowned/legacy family for current logged in user
+export async function claimFamilyIfUnowned(familyId, user) {
+  if (!user || !user.uid || !familyId) return false;
+  try {
+    const cleanId = familyId.trim();
+    const familyRef = doc(db, 'families', cleanId);
+    const snap = await getDoc(familyRef);
+    if (!snap.exists()) return false;
+    const data = snap.data();
+    if (!data.ownerUid && (!data.admins || data.admins.length === 0)) {
+      const adminMember = {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        role: 'admin',
+        joinedAt: new Date().toISOString()
+      };
+      await updateDoc(familyRef, {
+        ownerUid: user.uid,
+        admins: [user.uid],
+        parents: [user.uid],
+        members: [adminMember]
+      });
+      // Update user profile to approved admin
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email || '',
+        displayName: user.displayName || '',
+        photoURL: user.photoURL || '',
+        familyId: cleanId,
+        role: 'admin',
+        status: 'approved',
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      return true;
+    }
+  } catch (e) {
+    console.warn('[ClaimFamily] Notice:', e.message);
+  }
+  return false;
 }
 
 // Real-time listener for user profile
