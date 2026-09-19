@@ -4,6 +4,22 @@ const fs = require('fs');
 const express = require('express');
 const { Server } = require('socket.io');
 
+// WebSocket client support across all Node.js versions (including Node 20 LTS on Proxmox/Debian)
+const WebSocket = (() => {
+  try {
+    return require('ws');
+  } catch (e) {
+    if (typeof globalThis.WebSocket !== 'undefined') {
+      return globalThis.WebSocket;
+    }
+    return class {
+      constructor() {
+        throw new Error('WebSocket is not supported in this Node.js environment. Please run "npm install ws".');
+      }
+    };
+  }
+})();
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -624,7 +640,7 @@ async function addLovelaceCardToHass(data, host) {
     }, 8000);
 
     try {
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(wsUrl, { rejectUnauthorized: false });
     } catch (err) {
       cleanup();
       return resolve({ ok: false, message: `שגיאה ביצירת חיבור WebSocket: ${err.message}` });
@@ -807,7 +823,7 @@ function startHassEventListener() {
 
   let localWs = null;
   try {
-    localWs = new WebSocket(wsUrl);
+    localWs = new WebSocket(wsUrl, { rejectUnauthorized: false });
     hassListenerWs = localWs;
   } catch (err) {
     scheduleHassListenerReconnect();
