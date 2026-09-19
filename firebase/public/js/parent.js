@@ -4,7 +4,7 @@ import {
   loginWithGoogle, 
   logoutUser, 
   subscribeToAuth 
-} from './firebase-config.js?v=2.2.0';
+} from './firebase-config.js?v=2.3.0';
 import { 
   subscribeToFamily, 
   subscribeToDailyHistory, 
@@ -38,8 +38,14 @@ import {
   removeTablet,
   updateTabletName,
   revokeAllTablets,
+  generateLovelaceCardYaml,
+  generateHassAutomationYaml,
+  generateHassWebhookYaml,
+  testHassConnection,
+  createAndSyncAllHassEntities,
+  addLovelaceCardToHass,
   ICON_LABELS 
-} from './db.js?v=2.2.0';
+} from './db.js?v=2.3.0';
 
 let currentFamilyId = getStoredFamilyId();
 let currentData = null;
@@ -404,6 +410,8 @@ export function switchTab(tabId) {
 
   if (tabId === 'history') {
     loadHistory(document.getElementById('history-date-select')?.value || getTodayDateString());
+  } else if (tabId === 'hass' && currentData) {
+    renderHassTab(currentData);
   }
 }
 window.switchTab = switchTab;
@@ -417,7 +425,8 @@ function renderStatusTab(data) {
 
   const hass = data.homeAssistant || {};
   const isBypass = Boolean(hass.parentBypass);
-  const tvBlocked = hass.enabled && !stats.allCompleted && !isBypass;
+  const allowTv = (hass.targetScope === 'any' ? stats.completedTasks > 0 : stats.allCompleted) || isBypass;
+  const tvBlocked = hass.enabled && !allowTv;
 
   const tvBadge = document.getElementById('stat-tv-status');
   if (tvBadge) {
@@ -564,12 +573,29 @@ function renderManageTab(data) {
 }
 
 function renderHassTab(data) {
+  if (!data) return;
   const hass = data.homeAssistant || {};
-  document.getElementById('hass-enabled').checked = Boolean(hass.enabled);
-  document.getElementById('hass-url').value = hass.url || 'http://homeassistant.local:8123';
-  document.getElementById('hass-token').value = hass.token || '';
-  document.getElementById('hass-entity').value = hass.tvEntityId || 'switch.tv_socket';
-  document.getElementById('hass-autoblock').checked = Boolean(hass.autoBlockTv !== false);
+  
+  const enabledInput = document.getElementById('hass-enabled');
+  if (enabledInput) enabledInput.checked = Boolean(hass.enabled);
+  
+  const urlInput = document.getElementById('hass-url');
+  if (urlInput) urlInput.value = hass.url || 'http://homeassistant.local:8123';
+  
+  const tokenInput = document.getElementById('hass-token');
+  if (tokenInput) tokenInput.value = hass.token || '';
+  
+  const entityInput = document.getElementById('hass-entity');
+  if (entityInput) entityInput.value = hass.tvEntityId || 'switch.tv_socket';
+
+  const scopeSelect = document.getElementById('hass-target-scope');
+  if (scopeSelect) scopeSelect.value = hass.targetScope || 'all';
+
+  const pollInput = document.getElementById('hass-poll-interval');
+  if (pollInput) pollInput.value = hass.pollIntervalSeconds || 30;
+
+  const autoBlockInput = document.getElementById('hass-autoblock');
+  if (autoBlockInput) autoBlockInput.checked = Boolean(hass.autoBlockTv !== false);
 
   const bypassBtn = document.getElementById('hass-bypass-toggle-btn');
   if (bypassBtn) {
@@ -580,6 +606,102 @@ function renderHassTab(data) {
       bypassBtn.className = 'px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-2';
       bypassBtn.innerHTML = '<span>🔒</span><span>מעקף כבוי (חוקים רגילים) - לחץ להפעלה</span>';
     }
+  }
+
+  // Live Card Preview
+  const previewTitle = document.getElementById('preview-card-family-title');
+  if (previewTitle) {
+    previewTitle.innerText = `לוח משימות לילדים (${data.name || 'Kids Tasker'})`;
+  }
+
+  const status = calculateCompletionStatus(data);
+  const allowTv = (hass.targetScope === 'any' ? status.completedTasks > 0 : status.allCompleted) || Boolean(hass.parentBypass);
+
+  const previewTvAllow = document.getElementById('preview-tv-allow');
+  if (previewTvAllow) {
+    previewTvAllow.innerText = allowTv ? 'on' : 'off';
+    previewTvAllow.className = `px-2 py-0.5 rounded font-mono font-bold text-[11px] ${
+      allowTv ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-rose-950 text-rose-300 border border-rose-800/60'
+    }`;
+  }
+
+  const previewTvToggle = document.getElementById('preview-tv-toggle');
+  if (previewTvToggle) {
+    previewTvToggle.innerText = allowTv ? 'on' : 'off';
+    previewTvToggle.className = `px-2 py-0.5 rounded font-mono font-bold text-[11px] ${
+      allowTv ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-rose-950 text-rose-300 border border-rose-800/60'
+    }`;
+  }
+
+  const previewBypass = document.getElementById('preview-parent-bypass');
+  if (previewBypass) {
+    previewBypass.innerText = hass.parentBypass ? 'on' : 'off';
+    previewBypass.className = `px-2 py-0.5 rounded font-mono font-bold text-[11px] ${
+      hass.parentBypass ? 'bg-purple-950 text-purple-300 border border-purple-800/60' : 'bg-slate-800 text-slate-400'
+    }`;
+  }
+
+  const previewAllDone = document.getElementById('preview-all-done');
+  if (previewAllDone) {
+    previewAllDone.innerText = status.allCompleted ? 'on' : 'off';
+    previewAllDone.className = `px-2 py-0.5 rounded font-mono font-bold text-[11px] ${
+      status.allCompleted ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'
+    }`;
+  }
+
+  const previewRemaining = document.getElementById('preview-remaining');
+  if (previewRemaining) {
+    previewRemaining.innerText = `${status.remainingTasks} משימות`;
+  }
+
+  const previewPercentage = document.getElementById('preview-percentage');
+  if (previewPercentage) {
+    previewPercentage.innerText = `${status.percentage}%`;
+  }
+
+  const previewChildren = document.getElementById('preview-children-entities');
+  if (previewChildren) {
+    const children = data.children || [];
+    if (children.length === 0) {
+      previewChildren.innerHTML = '<span class="text-slate-500 text-xs italic">אין ילדים מוגדרים</span>';
+    } else {
+      previewChildren.innerHTML = children.map(child => {
+        const total = (child.tasks || []).length;
+        const done = (child.tasks || []).filter(t => t.completed).length;
+        const isDone = total > 0 && done === total;
+        return `
+          <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/60 border border-slate-800/40 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-sm">👦</span>
+              <span class="font-medium text-slate-300">${child.name}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-slate-400 font-mono">${done}/${total}</span>
+              <span class="px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
+                isDone ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' : 'bg-slate-800 text-slate-400'
+              }">${isDone ? 'on' : 'off'}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // Dynamic YAML generation
+  const origin = window.location.origin || '';
+  const cardYamlEl = document.getElementById('card-yaml-code');
+  if (cardYamlEl) {
+    cardYamlEl.innerText = generateLovelaceCardYaml(data, origin, currentFamilyId);
+  }
+
+  const hassYamlEl = document.getElementById('hass-yaml-code');
+  if (hassYamlEl) {
+    hassYamlEl.innerText = generateHassAutomationYaml(hass.tvEntityId);
+  }
+
+  const webhookYamlEl = document.getElementById('webhook-yaml-code');
+  if (webhookYamlEl) {
+    webhookYamlEl.innerText = generateHassWebhookYaml(currentFamilyId);
   }
 }
 
@@ -1148,15 +1270,205 @@ window.saveHassSettings = async function(e) {
     url: document.getElementById('hass-url').value.trim(),
     token: document.getElementById('hass-token').value.trim(),
     tvEntityId: document.getElementById('hass-entity').value.trim(),
+    targetScope: document.getElementById('hass-target-scope')?.value || 'all',
+    pollIntervalSeconds: parseInt(document.getElementById('hass-poll-interval')?.value || '30', 10),
     autoBlockTv: document.getElementById('hass-autoblock').checked,
     parentBypass: Boolean(currentData?.homeAssistant?.parentBypass)
   };
 
   try {
     await saveHomeAssistantConfig(currentFamilyId, config);
-    showToast('הגדרות בית חכם נשמרו בהצלחה');
+    if (currentData) {
+      currentData.homeAssistant = { ...(currentData.homeAssistant || {}), ...config };
+      renderHassTab(currentData);
+    }
+    showToast('הגדרות בית חכם נשמרו בהצלחה! 💾');
+
+    // If enabled with valid url and token, attempt entity sync
+    if (config.enabled && config.url && config.token) {
+      createAndSyncAllHassEntities(currentData).then(res => {
+        if (res.ok) console.log(`[Hass Auto-Sync] ${res.message}`);
+      }).catch(err => console.warn('[Hass Auto-Sync] Warning:', err));
+    }
   } catch (e) {
     showToast(e.message, true);
+  }
+};
+
+window.handleTestHass = async function() {
+  const url = document.getElementById('hass-url')?.value?.trim();
+  const token = document.getElementById('hass-token')?.value?.trim();
+  const entity = document.getElementById('hass-entity')?.value?.trim();
+  const resultEl = document.getElementById('hass-test-result');
+  const btn = document.getElementById('btn-test-hass');
+
+  if (!url || !token) {
+    showToast('נא למלא כתובת וטוקן לבדיקה', true);
+    if (resultEl) {
+      resultEl.className = 'p-4 rounded-xl border bg-rose-950/40 border-rose-800 text-rose-300 text-xs font-semibold';
+      resultEl.innerText = 'שגיאה: נא למלא כתובת שרת וטוקן גישה';
+      resultEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (btn) btn.innerHTML = '<span>⏳</span><span>בודק חיבור...</span>';
+  if (resultEl) {
+    resultEl.className = 'p-4 rounded-xl border bg-slate-800 border-slate-700 text-slate-300 text-xs font-semibold animate-pulse';
+    resultEl.innerText = 'מתחבר ל-Home Assistant ובודק קישוריות...';
+    resultEl.classList.remove('hidden');
+  }
+
+  try {
+    const res = await testHassConnection(url, token, entity);
+    if (res.ok) {
+      showToast(res.message || 'החיבור הצליח!');
+      let entityInfo = '';
+      if (res.entityState) {
+        entityInfo = ` | מצב ישות ${entity}: ${res.entityState.state}`;
+      }
+      resultEl.className = 'p-4 rounded-xl border bg-emerald-950/40 border-emerald-800 text-emerald-300 text-xs font-semibold';
+      resultEl.innerHTML = `<span>✔ ${res.message}${res.warning ? `<br><span class="text-amber-300">⚠️ ${res.warning}</span>` : ''}${entityInfo}</span>`;
+    } else {
+      showToast(res.message, true);
+      resultEl.className = 'p-4 rounded-xl border bg-rose-950/40 border-rose-800 text-rose-300 text-xs font-semibold';
+      resultEl.innerHTML = `<span>✖ ${res.message}</span>`;
+    }
+  } catch (err) {
+    showToast(err.message, true);
+    if (resultEl) {
+      resultEl.className = 'p-4 rounded-xl border bg-rose-950/40 border-rose-800 text-rose-300 text-xs font-semibold';
+      resultEl.innerHTML = `<span>✖ שגיאה: ${err.message}</span>`;
+    }
+  } finally {
+    if (btn) btn.innerHTML = '<span>📡</span><span>בדוק חיבור ל-Home Assistant</span>';
+  }
+};
+
+window.handleSyncHassEntities = async function() {
+  if (!currentData) return;
+  const resultEl = document.getElementById('hass-test-result');
+  const btn = document.getElementById('btn-sync-entities');
+
+  if (btn) btn.innerHTML = '<span>⏳</span><span>מסנכרן...</span>';
+  try {
+    const res = await createAndSyncAllHassEntities(currentData);
+    if (res.ok) {
+      showToast(res.message);
+      if (resultEl) {
+        resultEl.className = 'p-4 rounded-xl border bg-emerald-950/40 border-emerald-800 text-emerald-300 text-xs font-semibold';
+        resultEl.innerHTML = `<span>✔ ${res.message} (${res.count} ישויות נוצרו/עודכנו)</span>`;
+        resultEl.classList.remove('hidden');
+      }
+    } else {
+      showToast(res.message, true);
+      if (resultEl) {
+        resultEl.className = 'p-4 rounded-xl border bg-rose-950/40 border-rose-800 text-rose-300 text-xs font-semibold';
+        resultEl.innerHTML = `<span>✖ ${res.message}</span>`;
+        resultEl.classList.remove('hidden');
+      }
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    if (btn) btn.innerHTML = '<span>🔄</span><span>סנכרן ישויות עכשיו</span>';
+  }
+};
+
+window.handleAddLovelaceCard = async function() {
+  if (!currentData) return;
+  const feedbackEl = document.getElementById('hass-card-feedback');
+  const btn = document.getElementById('btn-add-lovelace-card');
+
+  if (btn) btn.innerHTML = '<span>⏳</span><span>מוסיף כרטיס...</span>';
+  if (feedbackEl) {
+    feedbackEl.className = 'p-3.5 rounded-xl border bg-slate-800 border-slate-700 text-slate-300 text-xs font-semibold animate-pulse';
+    feedbackEl.innerText = 'מתחבר ל-Home Assistant WebSocket ושומר את הכרטיס...';
+    feedbackEl.classList.remove('hidden');
+  }
+
+  try {
+    const res = await addLovelaceCardToHass(currentData, window.location.origin, currentFamilyId);
+    if (res.ok) {
+      showToast(res.message);
+      if (feedbackEl) {
+        feedbackEl.className = 'p-3.5 rounded-xl border bg-emerald-950/40 border-emerald-800 text-emerald-300 text-xs font-semibold';
+        feedbackEl.innerHTML = `<span>✔ ${res.message}</span>`;
+      }
+    } else {
+      showToast(res.message, true);
+      if (feedbackEl) {
+        feedbackEl.className = 'p-3.5 rounded-xl border bg-rose-950/40 border-rose-800 text-rose-300 text-xs font-semibold';
+        feedbackEl.innerHTML = `<span>✖ ${res.message}</span>`;
+      }
+    }
+  } catch (err) {
+    showToast(err.message, true);
+    if (feedbackEl) {
+      feedbackEl.className = 'p-3.5 rounded-xl border bg-rose-950/40 border-rose-800 text-rose-300 text-xs font-semibold';
+      feedbackEl.innerHTML = `<span>✖ ${err.message}</span>`;
+    }
+  } finally {
+    if (btn) btn.innerHTML = '<span>➕</span><span>הוסף כרטיס ל-Home Assistant בלחיצה</span>';
+  }
+};
+
+window.handleCopyCardYaml = async function() {
+  const yaml = document.getElementById('card-yaml-code')?.innerText;
+  if (yaml) {
+    try {
+      await navigator.clipboard.writeText(yaml);
+      showToast('קוד כרטיס Lovelace הועתק ללוח! 📋');
+    } catch (e) {
+      showToast('לא ניתן להעתיק ללוח אוטומטית', true);
+    }
+  }
+};
+
+window.handleCopyHassAutomationYaml = async function() {
+  const yaml = document.getElementById('hass-yaml-code')?.innerText;
+  if (yaml) {
+    try {
+      await navigator.clipboard.writeText(yaml);
+      showToast('קוד אוטומציית Home Assistant הועתק ללוח! 📋');
+    } catch (e) {
+      showToast('לא ניתן להעתיק ללוח אוטומטית', true);
+    }
+  }
+};
+
+window.handleCopyWebhookConfig = async function() {
+  const yaml = document.getElementById('webhook-yaml-code')?.innerText;
+  if (yaml) {
+    try {
+      await navigator.clipboard.writeText(yaml);
+      showToast('הגדרת Webhook הועתקה ללוח! 📋');
+    } catch (e) {
+      showToast('לא ניתן להעתיק ללוח אוטומטית', true);
+    }
+  }
+};
+
+window.handleTestWebhook = async function() {
+  if (!currentFamilyId) return;
+  const btn = document.getElementById('btn-test-webhook');
+  if (btn) btn.innerHTML = '<span>⏳</span><span>שולח...</span>';
+  try {
+    const res = await fetch('https://us-central1-kids-tasker-c0ef6.cloudfunctions.net/hassBypassWebhook', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ familyId: currentFamilyId, enabled: true })
+    });
+    const json = await res.json();
+    if (res.ok && json.success) {
+      showToast('Webhook נשלח בהצלחה! מעקף הופעל 🚀');
+    } else {
+      showToast(json.error || 'שגיאה בשליחת Webhook', true);
+    }
+  } catch (err) {
+    showToast(`שגיאה בשליחת Webhook: ${err.message}`, true);
+  } finally {
+    if (btn) btn.innerHTML = '<span>🧪</span><span>שלח Webhook בדיקה</span>';
   }
 };
 

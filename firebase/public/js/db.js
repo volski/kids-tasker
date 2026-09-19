@@ -391,6 +391,591 @@ export async function saveHomeAssistantConfig(familyId, config) {
   });
 }
 
+// ==========================================
+// Home Assistant (Hass.io) Integration Helpers
+// ==========================================
+
+export function getCleanHassUrl(url) {
+  if (!url) return '';
+  return url.trim().replace(/\/+$/, '');
+}
+
+export function getHassHeaders(token) {
+  return {
+    'Authorization': `Bearer ${(token || '').trim()}`,
+    'Content-Type': 'application/json'
+  };
+}
+
+// Test connectivity and fetch entity state
+export async function testHassConnection(url, token, entityId) {
+  const cleanUrl = getCleanHassUrl(url);
+  if (!cleanUrl || !token) {
+    return { ok: false, message: 'כתובת שרת וטוקן הינם שדות חובה' };
+  }
+
+  try {
+    const apiRes = await fetch(`${cleanUrl}/api/`, {
+      headers: getHassHeaders(token),
+      signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined
+    });
+
+    if (!apiRes.ok) {
+      if (apiRes.status === 401) {
+        return { ok: false, message: 'שגיאת אימות: הטוקן (Token) אינו תקין או שפג תוקפו' };
+      }
+      return { ok: false, message: `השרת החזיר קוד שגיאה: ${apiRes.status}` };
+    }
+
+    let entityState = null;
+    if (entityId && entityId.trim()) {
+      try {
+        const entityRes = await fetch(`${cleanUrl}/api/states/${entityId.trim()}`, {
+          headers: getHassHeaders(token),
+          signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined
+        });
+        if (entityRes.ok) {
+          entityState = await entityRes.json();
+        } else {
+          return {
+            ok: true,
+            warning: `חיבור ל-Home Assistant הצליח, אך הישות "${entityId}" לא נמצאה (קוד ${entityRes.status}). בדוק את מזהה הישות.`,
+            entityState: null
+          };
+        }
+      } catch (err) {
+        return {
+          ok: true,
+          warning: `חיבור הצליח, אך שגיאה בבדיקת ישות "${entityId}": ${err.message}`,
+          entityState: null
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      message: 'החיבור ל-Home Assistant הצליח באופן מושלם! 🎉',
+      entityState
+    };
+  } catch (err) {
+    let extra = '';
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
+      extra = ' (שים לב: הדפדפן חוסם קריאות HTTP מאתר HTTPS כ-Mixed Content. מומלץ להשתמש בכתובת Nabu Casa HTTPS או להשתמש בהעתקת קוד ה-YAML ישירות ל-Home Assistant)';
+    }
+    return { ok: false, message: `לא ניתן להתחבר לשרת Home Assistant: ${err.message}${extra}` };
+  }
+}
+
+// Automatically create and sync all entities in Home Assistant
+export async function createAndSyncAllHassEntities(data) {
+  const hass = data?.homeAssistant;
+  if (!hass || !hass.enabled || !hass.url || !hass.token) {
+    return { ok: false, message: 'Home Assistant אינו מופעל או שחסרה כתובת/טוקן', entities: [] };
+  }
+
+  const cleanUrl = getCleanHassUrl(hass.url);
+  const status = calculateCompletionStatus(data);
+  const createdEntities = [];
+  const parentBypass = Boolean(hass.parentBypass);
+
+  const allowTv = (hass.targetScope === 'any' ? status.completedTasks > 0 : status.allCompleted) || parentBypass;
+
+  async function postEntity(entityId, state, attributes) {
+    try {
+      const res = await fetch(`${cleanUrl}/api/states/${entityId}`, {
+        method: 'POST',
+        headers: getHassHeaders(hass.token),
+        body: JSON.stringify({ state: String(state), attributes }),
+        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined
+      });
+      if (res.ok) {
+        createdEntities.push({
+          entity_id: entityId,
+          state: String(state),
+          friendly_name: attributes.friendly_name || entityId
+        });
+      }
+
+      // If entity is an input_boolean, also call the service so Home Assistant native helper syncs
+      if (entityId.startsWith('input_boolean.')) {
+        try {
+          await fetch(`${cleanUrl}/api/services/input_boolean/${state === 'on' ? 'turn_on' : 'turn_off'}`, {
+            method: 'POST',
+            headers: getHassHeaders(hass.token),
+            body: JSON.stringify({ entity_id: entityId }),
+            signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined
+          });
+        } catch (e) {}
+      }
+    } catch (err) {
+      console.warn(`[Home Assistant] Failed to post entity ${entityId}:`, err.message);
+    }
+  }
+
+  const postPromises = [
+    // 1. Primary TV Permission Entity: binary_sensor.kids_tasks_allow_tv
+    postEntity('binary_sensor.kids_tasks_allow_tv', allowTv ? 'on' : 'off', {
+      friendly_name: `אישור צפייה בטלוויזיה (${data.name || 'Kids Tasker'})`,
+      device_class: 'power',
+      icon: allowTv ? 'mdi:television' : 'mdi:television-off',
+      all_completed: status.allCompleted,
+      parent_bypass: parentBypass,
+      remaining_tasks: status.remainingTasks,
+      total_tasks: status.totalTasks,
+      completed_tasks: status.completedTasks,
+      percentage: status.percentage,
+      last_updated: new Date().toISOString()
+    }),
+
+    // 2. Input Boolean helper equivalent: input_boolean.kids_tasks_allow_tv
+    postEntity('input_boolean.kids_tasks_allow_tv', allowTv ? 'on' : 'off', {
+      friendly_name: 'מתג אישור טלוויזיה - משימות ילדים',
+      icon: allowTv ? 'mdi:television-check' : 'mdi:television-stop',
+      all_completed: status.allCompleted,
+      parent_bypass: parentBypass,
+      last_updated: new Date().toISOString()
+    }),
+
+    // 2b. Parent Bypass switch helper in Home Assistant: input_boolean.kids_tasks_parent_bypass
+    postEntity('input_boolean.kids_tasks_parent_bypass', parentBypass ? 'on' : 'off', {
+      friendly_name: 'מעקף הורים - אישור צפייה בטלוויזיה',
+      icon: parentBypass ? 'mdi:lock-open-variant' : 'mdi:lock',
+      description: 'כאשר מופעל, הטלוויזיה מותרת לצפייה גם אם המשימות טרם הושלמו',
+      last_updated: new Date().toISOString()
+    }),
+
+    // 3. Overall completion binary sensor: binary_sensor.kids_tasks_completed
+    postEntity('binary_sensor.kids_tasks_completed', status.allCompleted ? 'on' : 'off', {
+      friendly_name: 'משימות ילדים - כל המשימות הושלמו',
+      icon: status.allCompleted ? 'mdi:check-circle-outline' : 'mdi:clock-alert-outline',
+      all_completed: status.allCompleted,
+      total_tasks: status.totalTasks,
+      completed_tasks: status.completedTasks,
+      remaining_tasks: status.remainingTasks,
+      percentage: status.percentage,
+      last_updated: new Date().toISOString()
+    }),
+
+    // 4. Remaining tasks sensor: sensor.kids_tasks_remaining
+    postEntity('sensor.kids_tasks_remaining', status.remainingTasks, {
+      friendly_name: 'משימות ילדים שנותרו',
+      unit_of_measurement: 'משימות',
+      icon: 'mdi:format-list-checks',
+      state_class: 'measurement'
+    }),
+
+    // 5. Completion percentage sensor: sensor.kids_tasks_percentage
+    postEntity('sensor.kids_tasks_percentage', status.percentage, {
+      friendly_name: 'אחוז ביצוע משימות ילדים',
+      unit_of_measurement: '%',
+      icon: 'mdi:percent',
+      state_class: 'measurement'
+    })
+  ];
+
+  // 6. Child entities
+  for (const child of (data.children || [])) {
+    const total = (child.tasks || []).length;
+    const done = (child.tasks || []).filter(t => t.completed).length;
+    const isChildDone = total > 0 && done === total;
+    const childEntityId = `binary_sensor.kids_tasks_${child.id}_completed`;
+    const childRemainingId = `sensor.kids_tasks_${child.id}_remaining`;
+
+    postPromises.push(
+      postEntity(childEntityId, isChildDone ? 'on' : 'off', {
+        friendly_name: `משימות ${child.name} - הושלמו`,
+        icon: isChildDone ? 'mdi:account-check' : 'mdi:account-clock',
+        child_id: child.id,
+        child_name: child.name,
+        completed_tasks: done,
+        total_tasks: total,
+        remaining_tasks: total - done
+      }),
+      postEntity(childRemainingId, total - done, {
+        friendly_name: `משימות שנותרו ל${child.name}`,
+        unit_of_measurement: 'משימות',
+        icon: 'mdi:checkbox-marked-circle-outline',
+        child_name: child.name
+      })
+    );
+  }
+
+  await Promise.all(postPromises);
+
+  // 7. Active TV Block Enforcement
+  if (hass.autoBlockTv && hass.tvEntityId) {
+    try {
+      const entityId = hass.tvEntityId.trim();
+      const stateRes = await fetch(`${cleanUrl}/api/states/${entityId}`, {
+        headers: getHassHeaders(hass.token),
+        signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined
+      });
+
+      if (stateRes.ok) {
+        const entityData = await stateRes.json();
+        const currentState = (entityData.state || '').toLowerCase();
+        const isTvOn = currentState === 'on' || currentState === 'playing' || currentState === 'paused';
+
+        if (!allowTv && isTvOn) {
+          console.log(`[Home Assistant] BLOCKING TV (${entityId}): Chores incomplete & bypass off. Turning OFF TV...`);
+          await fetch(`${cleanUrl}/api/services/homeassistant/turn_off`, {
+            method: 'POST',
+            headers: getHassHeaders(hass.token),
+            body: JSON.stringify({ entity_id: entityId }),
+            signal: typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[Home Assistant] Failed to enforce TV block on ${hass.tvEntityId}:`, err.message);
+    }
+  }
+
+  return {
+    ok: true,
+    count: createdEntities.length,
+    entities: createdEntities,
+    message: `נוצרו ועודכנו ${createdEntities.length} ישויות ב-Home Assistant בהצלחה! 🎉`
+  };
+}
+
+// Generate Lovelace Card Configuration Object
+export function generateLovelaceCardConfig(data, origin = '', familyId = '') {
+  const entities = [
+    {
+      entity: 'binary_sensor.kids_tasks_allow_tv',
+      name: 'אישור צפייה בטלוויזיה',
+      icon: 'mdi:television'
+    },
+    {
+      entity: 'input_boolean.kids_tasks_allow_tv',
+      name: 'מתג אישור טלוויזיה'
+    },
+    {
+      entity: 'input_boolean.kids_tasks_parent_bypass',
+      name: 'מעקף הורים (פתיחת טלוויזיה)',
+      icon: 'mdi:lock-open-variant'
+    },
+    {
+      entity: 'binary_sensor.kids_tasks_completed',
+      name: 'כל המשימות הושלמו'
+    },
+    {
+      entity: 'sensor.kids_tasks_remaining',
+      name: 'סה"כ משימות שנותרו לביצוע',
+      icon: 'mdi:format-list-checks'
+    },
+    {
+      entity: 'sensor.kids_tasks_percentage',
+      name: 'אחוז ביצוע משימות כולל',
+      icon: 'mdi:percent'
+    }
+  ];
+
+  if (data && data.children && data.children.length > 0) {
+    entities.push({
+      type: 'section',
+      label: '👦 פירוט לפי ילדים'
+    });
+
+    for (const child of data.children) {
+      entities.push({
+        entity: `binary_sensor.kids_tasks_${child.id}_completed`,
+        name: `משימות ${child.name}`
+      });
+      entities.push({
+        entity: `sensor.kids_tasks_${child.id}_remaining`,
+        name: `משימות שנותרו ל${child.name}`
+      });
+    }
+  }
+
+  if (data && data.homeAssistant && data.homeAssistant.tvEntityId) {
+    entities.push({
+      type: 'section',
+      label: '📺 מכשיר טלוויזיה'
+    });
+    entities.push({
+      entity: data.homeAssistant.tvEntityId.trim(),
+      name: 'שקע / מסך טלוויזיה'
+    });
+  }
+
+  const appUrl = origin ? (familyId ? `${origin}/index.html?family=${encodeURIComponent(familyId)}` : origin) : 'https://kids-tasker-c0ef6.web.app';
+  entities.push({
+    type: 'divider'
+  });
+  entities.push({
+    type: 'weblink',
+    name: '📱 פתח לוח משימות לטאבלט (Kids Tasker)',
+    url: appUrl,
+    icon: 'mdi:tablet-dashboard'
+  });
+
+  return {
+    type: 'entities',
+    title: `📋 לוח משימות לילדים (${(data && data.name) ? data.name : 'Kids Tasker'})`,
+    show_header_toggle: false,
+    entities: entities
+  };
+}
+
+// Generate Lovelace Card YAML for Home Assistant
+export function generateLovelaceCardYaml(data, origin = '', familyId = '') {
+  const card = generateLovelaceCardConfig(data, origin, familyId);
+  let yaml = `type: ${card.type}\n`;
+  yaml += `title: "${card.title}"\n`;
+  yaml += `show_header_toggle: false\n`;
+  yaml += `entities:\n`;
+
+  for (const ent of card.entities) {
+    if (ent.type === 'section') {
+      yaml += `  - type: section\n`;
+      yaml += `    label: "${ent.label}"\n`;
+    } else if (ent.type === 'divider') {
+      yaml += `  - type: divider\n`;
+    } else if (ent.type === 'weblink') {
+      yaml += `  - type: weblink\n`;
+      yaml += `    name: "${ent.name}"\n`;
+      yaml += `    url: "${ent.url}"\n`;
+      if (ent.icon) yaml += `    icon: ${ent.icon}\n`;
+    } else {
+      yaml += `  - entity: ${ent.entity}\n`;
+      if (ent.name) yaml += `    name: "${ent.name}"\n`;
+      if (ent.icon) yaml += `    icon: ${ent.icon}\n`;
+    }
+  }
+  return yaml;
+}
+
+// Connect to Home Assistant via WebSocket to automatically create or append the card to Lovelace
+export async function addLovelaceCardToHass(data, origin = '', familyId = '') {
+  const hass = data?.homeAssistant;
+  if (!hass || !hass.enabled || !hass.url || !hass.token) {
+    return { ok: false, message: 'Home Assistant אינו מופעל או שחסרה כתובת/טוקן' };
+  }
+
+  // Ensure all entities are created in HA first
+  await createAndSyncAllHassEntities(data).catch(() => null);
+
+  const cleanUrl = getCleanHassUrl(hass.url);
+  const wsUrl = cleanUrl.replace(/^http:\/\//i, 'ws://').replace(/^https:\/\//i, 'wss://') + '/api/websocket';
+  const cardConfig = generateLovelaceCardConfig(data, origin, familyId);
+
+  return new Promise((resolve) => {
+    let ws;
+    let timeoutId;
+    let messageId = 1;
+    const pendingRequests = new Map();
+    let isCleanedUp = false;
+
+    const cleanup = () => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
+      clearTimeout(timeoutId);
+      if (ws) {
+        try { ws.close(); } catch (e) {}
+      }
+    };
+
+    timeoutId = setTimeout(() => {
+      cleanup();
+      resolve({ ok: false, message: 'פסק זמן בהתחברות ל-Home Assistant WebSocket (Timeout)' });
+    }, 8000);
+
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (err) {
+      cleanup();
+      return resolve({ ok: false, message: `שגיאה ביצירת חיבור WebSocket: ${err.message}` });
+    }
+
+    function sendCommand(cmd) {
+      const id = messageId++;
+      return new Promise((res, rej) => {
+        pendingRequests.set(id, { resolve: res, reject: rej });
+        try {
+          ws.send(JSON.stringify({ id, ...cmd }));
+        } catch (e) {
+          rej(e);
+        }
+      });
+    }
+
+    ws.onmessage = async (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+
+        // 1. Auth challenge
+        if (msg.type === 'auth_required') {
+          ws.send(JSON.stringify({ type: 'auth', access_token: hass.token.trim() }));
+          return;
+        }
+
+        if (msg.type === 'auth_invalid') {
+          cleanup();
+          return resolve({ ok: false, message: 'שגיאת אימות: טוקן לא תקין או פג תוקף' });
+        }
+
+        if (msg.type === 'auth_ok') {
+          try {
+            // Attempt 1: Read default dashboard config
+            const configRes = await sendCommand({ type: 'lovelace/config' });
+
+            if (configRes.success && configRes.result) {
+              const lovelaceConfig = configRes.result;
+              if (!Array.isArray(lovelaceConfig.views) || lovelaceConfig.views.length === 0) {
+                lovelaceConfig.views = [{ title: 'Home', cards: [] }];
+              }
+              const firstView = lovelaceConfig.views[0];
+              if (!Array.isArray(firstView.cards)) {
+                firstView.cards = [];
+              }
+
+              // Check if kids tasker card already exists
+              const existingIdx = firstView.cards.findIndex(c => 
+                c && (c.title === cardConfig.title || (typeof c.title === 'string' && c.title.includes('Kids Tasker')))
+              );
+
+              if (existingIdx >= 0) {
+                firstView.cards[existingIdx] = cardConfig;
+              } else {
+                firstView.cards.push(cardConfig);
+              }
+
+              const saveRes = await sendCommand({
+                type: 'lovelace/config/save',
+                config: lovelaceConfig
+              });
+
+              cleanup();
+              if (saveRes.success) {
+                return resolve({
+                  ok: true,
+                  mode: 'main_dashboard',
+                  message: 'הכרטיס נוסף בהצלחה לדשבורד הראשי ב-Home Assistant! 🎉',
+                  path: '/lovelace'
+                });
+              } else {
+                return resolve({
+                  ok: false,
+                  message: 'שגיאה בשמירת תצורת הדשבורד: ' + (saveRes.error?.message || 'שגיאה לא ידועה')
+                });
+              }
+            } else {
+              // Dedicated dashboard
+              await sendCommand({
+                type: 'lovelace/dashboards/create',
+                url_path: 'kids-tasker',
+                title: 'לוח משימות לילדים',
+                icon: 'mdi:checkbox-marked-circle-outline',
+                show_in_sidebar: true
+              }).catch(() => null);
+
+              const saveDedicated = await sendCommand({
+                type: 'lovelace/config/save',
+                url_path: 'kids-tasker',
+                config: {
+                  title: 'לוח משימות לילדים',
+                  views: [{
+                    title: 'משימות',
+                    cards: [cardConfig]
+                  }]
+                }
+              });
+
+              cleanup();
+              if (saveDedicated.success) {
+                return resolve({
+                  ok: true,
+                  mode: 'dedicated_dashboard',
+                  message: 'נוצר דשבורד ייעודי "kids-tasker" בסרגל הצד ב-Home Assistant עם הכרטיס! 🎉',
+                  path: '/kids-tasker'
+                });
+              } else {
+                return resolve({
+                  ok: false,
+                  message: 'לא ניתן לשמור כרטיס בדשבורד ייעודי: ' + (saveDedicated.error?.message || 'שגיאה לא ידועה')
+                });
+              }
+            }
+          } catch (err) {
+            cleanup();
+            return resolve({ ok: false, message: 'שגיאה בביצוע פקודות Lovelace מול Home Assistant: ' + err.message });
+          }
+        }
+
+        // Handle Command Responses
+        if (msg.id && pendingRequests.has(msg.id)) {
+          const req = pendingRequests.get(msg.id);
+          pendingRequests.delete(msg.id);
+          req.resolve(msg);
+        }
+      } catch (err) {
+        cleanup();
+        resolve({ ok: false, message: 'שגיאה בעיבוד הודעת Home Assistant: ' + err.message });
+      }
+    };
+
+    ws.onerror = (err) => {
+      cleanup();
+      let extra = '';
+      if (typeof window !== 'undefined' && window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
+        extra = ' (שים לב: הדפדפן אינו מאפשר חיבור ws בלתי-מוצפן מתוך דף https. אנא השתמש בכתובת Nabu Casa https:// או העתק את ה-YAML ישירות למערכת)';
+      }
+      resolve({ ok: false, message: `שגיאת חיבור ל-WebSocket: ${err.message || 'לא ניתן להתחבר לשרת'}${extra}` });
+    };
+  });
+}
+
+// Generate Automation YAML for Home Assistant
+export function generateHassAutomationYaml(tvEntityId = 'switch.tv_socket') {
+  const entity = (tvEntityId && tvEntityId.trim()) ? tvEntityId.trim() : 'switch.tv_socket';
+  return `# אוטומציה: כיבוי מיידי כשהטלוויזיה נדלקת לפני סיום משימות
+alias: "Kids Tasks - Block TV If Incomplete"
+description: "מכבה את הטלוויזיה אוטומטית אם היא נדלקת לפני סיום כל המשימות היומיות בלוח"
+trigger:
+  - platform: state
+    entity_id: ${entity}
+    to: "on"
+condition:
+  - condition: state
+    entity_id: binary_sensor.kids_tasks_allow_tv
+    state: "off"
+action:
+  - service: homeassistant.turn_off
+    target:
+      entity_id: ${entity}
+  - service: persistent_notification.create
+    data:
+      title: "📺 הטלוויזיה נחסמה"
+      message: "הטלוויזיה כובתה אוטומטית כי המשימות היומיות בלוח טרם הושלמו!"
+mode: single
+`;
+}
+
+// Generate Webhook YAML configuration for Home Assistant rest_command
+export function generateHassWebhookYaml(familyId = 'my-family') {
+  const cleanId = (familyId && familyId.trim()) ? familyId.trim() : 'my-family';
+  const webhookUrl = 'https://us-central1-kids-tasker-c0ef6.cloudfunctions.net/hassBypassWebhook';
+  return `# הגדרה ב-configuration.yaml לשליטה במעקף הורים ישירות מתוך Home Assistant:
+rest_command:
+  kids_tasker_bypass_on:
+    url: "${webhookUrl}"
+    method: POST
+    headers:
+      content-type: "application/json"
+    payload: '{"familyId": "${cleanId}", "enabled": true}'
+
+  kids_tasker_bypass_off:
+    url: "${webhookUrl}"
+    method: POST
+    headers:
+      content-type: "application/json"
+    payload: '{"familyId": "${cleanId}", "enabled": false}'
+`;
+}
+
 // Update Family Name
 export async function updateFamilyName(familyId, newName) {
   const cleanName = (newName || '').trim();
