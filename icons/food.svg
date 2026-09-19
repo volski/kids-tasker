@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#F97316" fill-opacity="0.2"/>
+  <!-- Plate outer -->
+  <circle cx="32" cy="34" r="18" fill="#F8FAFC" stroke="#EA580C" stroke-width="2"/>
+  <!-- Plate inner -->
+  <circle cx="32" cy="34" r="13" fill="#FED7AA" stroke="#FB923C" stroke-width="1.5"/>
+  <!-- Fork -->
+  <path d="M14 20V32C14 34 16 36 18 36H19V48" stroke="#64748B" stroke-width="2" stroke-linecap="round"/>
+  <path d="M16 20V27M19 20V27M22 20V27" stroke="#64748B" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Knife -->
+  <path d="M48 20V48M48 20C48 24 45 28 45 34H48" stroke="#64748B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Food / Apple or Egg in center -->
+  <circle cx="32" cy="34" r="6" fill="#EF4444"/>
+  <path d="M32 28C33 26 35 25 36 26" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

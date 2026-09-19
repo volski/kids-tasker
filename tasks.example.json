@@ -1,0 +1,70 @@
+{
+  "children": [
+    {
+      "id": "child_1",
+      "name": "ילד 1",
+      "tasks": [
+        {
+          "id": "t1",
+          "title": "צחצוח שיניים",
+          "completed": false,
+          "completedAt": null,
+          "icon": "toothbrush"
+        },
+        {
+          "id": "t2",
+          "title": "התלבשות לבד",
+          "completed": false,
+          "completedAt": null,
+          "icon": "clothes"
+        },
+        {
+          "id": "t3",
+          "title": "סידור תיק",
+          "completed": false,
+          "completedAt": null,
+          "icon": "backpack"
+        }
+      ]
+    },
+    {
+      "id": "child_2",
+      "name": "ילד 2",
+      "tasks": [
+        {
+          "id": "t1",
+          "title": "צחצוח שיניים",
+          "completed": false,
+          "completedAt": null,
+          "icon": "toothbrush"
+        },
+        {
+          "id": "t2",
+          "title": "התלבשות לבד",
+          "completed": false,
+          "completedAt": null,
+          "icon": "clothes"
+        },
+        {
+          "id": "t3",
+          "title": "סידור תיק",
+          "completed": false,
+          "completedAt": null,
+          "icon": "backpack"
+        }
+      ]
+    }
+  ],
+  "history": [],
+  "lastActiveDate": "2026-01-01",
+  "homeAssistant": {
+    "enabled": false,
+    "url": "http://homeassistant.local:8123",
+    "token": "",
+    "tvEntityId": "switch.tv_socket",
+    "autoBlockTv": true,
+    "pollIntervalSeconds": 30,
+    "targetScope": "all",
+    "parentBypass": false
+  }
+}

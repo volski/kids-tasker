@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Runtime and local configuration with sensitive keys
+tasks.json
+tasks.test.json
+.env
+*.env
+
+# Temporary and log files
+*.tmp
+*.log
+.DS_Store
+Thumbs.db

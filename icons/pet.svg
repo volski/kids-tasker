@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#D97706" fill-opacity="0.2"/>
+  <!-- Paw main pad -->
+  <ellipse cx="32" cy="40" rx="11" ry="8" fill="#F59E0B" stroke="#B45309" stroke-width="2"/>
+  <!-- Toe 1 -->
+  <circle cx="19" cy="28" r="4.5" fill="#F59E0B" stroke="#B45309" stroke-width="1.5"/>
+  <!-- Toe 2 -->
+  <circle cx="27" cy="22" r="4.5" fill="#F59E0B" stroke="#B45309" stroke-width="1.5"/>
+  <!-- Toe 3 -->
+  <circle cx="37" cy="22" r="4.5" fill="#F59E0B" stroke="#B45309" stroke-width="1.5"/>
+  <!-- Toe 4 -->
+  <circle cx="45" cy="28" r="4.5" fill="#F59E0B" stroke="#B45309" stroke-width="1.5"/>
+</svg>
