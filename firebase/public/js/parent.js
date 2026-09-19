@@ -30,6 +30,8 @@ import {
   rejectMember,
   updateMemberRole,
   removeMember,
+  updateFamilyName,
+  claimFamilyIfUnowned,
   ICON_LABELS 
 } from './db.js';
 
@@ -565,6 +567,12 @@ function renderFamilyTab(data) {
     }
   }
 
+  // 0. Update Family Name input
+  const nameInput = document.getElementById('edit-family-name-input');
+  if (nameInput && data.name && document.activeElement !== nameInput) {
+    nameInput.value = data.name;
+  }
+
   // 1. Pending Members Section
   const pendingContainer = document.getElementById('pending-members-list');
   if (pendingContainer) {
@@ -673,6 +681,44 @@ window.copyFamilyCode = function() {
   if (code) {
     navigator.clipboard.writeText(code);
     showToast('קוד המשפחה הועתק בהצלחה!');
+  }
+};
+
+window.handleUpdateFamilyName = async function(e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById('edit-family-name-input');
+  const newName = input?.value?.trim();
+  if (!newName) {
+    showToast('נא להזין שם למשפחה', true);
+    return;
+  }
+
+  const btn = document.getElementById('btn-save-family-name');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = 'שומר...';
+  }
+
+  try {
+    await updateFamilyName(currentFamilyId, newName);
+    showToast(`שם המשפחה עודכן בהצלחה ל-"${newName}"! 🎉`);
+    if (dashboardFamilyName) dashboardFamilyName.innerText = newName;
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>💾</span><span>שמור שם</span>';
+    }
+  }
+};
+
+window.openEditFamilyNamePrompt = function() {
+  switchTab('family');
+  const input = document.getElementById('edit-family-name-input');
+  if (input) {
+    input.focus();
+    input.select();
   }
 };
 
@@ -906,10 +952,19 @@ function loadDashboardForFamily(familyId) {
   if (familyUnsubscribe) familyUnsubscribe();
   updateConnectionStatus(false);
 
-  familyUnsubscribe = subscribeToFamily(familyId, data => {
+  familyUnsubscribe = subscribeToFamily(familyId, async data => {
+    const currentUid = currentUser ? currentUser.uid : null;
+
+    // Auto-claim legacy or unowned family for current user
+    if (!data.ownerUid && (!data.admins || data.admins.length === 0) && currentUser) {
+      await claimFamilyIfUnowned(familyId, currentUser);
+      data.ownerUid = currentUid;
+      data.admins = [currentUid];
+      data.parents = [currentUid];
+    }
+
     // STRICT SECURITY GATEKEEPER:
     // Verify that currentUser is actually an approved member or owner of this family!
-    const currentUid = currentUser ? currentUser.uid : null;
     const isApproved = data.ownerUid === currentUid || 
                        (data.admins || []).includes(currentUid) || 
                        (data.parents || []).includes(currentUid) || 
