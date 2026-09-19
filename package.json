@@ -1,0 +1,26 @@
+{
+  "name": "kids-tasker",
+  "version": "1.0.0",
+  "description": "All-in-One Kids Task Board Server with Node.js, Express, Socket.io, and Tailwind SPA",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test_server.js"
+  },
+  "keywords": [
+    "task-board",
+    "kids",
+    "routine",
+    "socket.io",
+    "express"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}
