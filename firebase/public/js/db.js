@@ -458,11 +458,27 @@ export async function testHassConnection(url, token, entityId) {
       entityState
     };
   } catch (err) {
-    let extra = '';
-    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
-      extra = ' (שים לב: הדפדפן חוסם קריאות HTTP מאתר HTTPS כ-Mixed Content. מומלץ להשתמש בכתובת Nabu Casa HTTPS או להשתמש בהעתקת קוד ה-YAML ישירות ל-Home Assistant)';
+    const isFetchFailure = err.name === 'TypeError' || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError');
+    const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && cleanUrl.startsWith('http:');
+    
+    if (isFetchFailure) {
+      if (isMixedContent) {
+        return {
+          ok: false,
+          isMixedContent: true,
+          cleanUrl,
+          message: 'חסימת אבטחה של הדפדפן (Mixed Content): אתר מאובטח (HTTPS) אינו יכול לגשת לכתובת מקומית לא מוצפנת (HTTP). מומלץ להשתמש בכתובת Nabu Casa HTTPS או להשתמש בהעתקת קוד ה-YAML ישירות ל-Home Assistant.'
+        };
+      }
+      return {
+        ok: false,
+        isCorsError: true,
+        cleanUrl,
+        message: 'חסימת CORS בדפדפן: יש לאשר את הדומיין של האפליקציה ב-configuration.yaml ב-Home Assistant כדי לאפשר גישה ישירה מהדפדפן.',
+        corsOrigin: typeof window !== 'undefined' ? window.location.origin : 'https://kids-tasker-c0ef6.web.app'
+      };
     }
-    return { ok: false, message: `לא ניתן להתחבר לשרת Home Assistant: ${err.message}${extra}` };
+    return { ok: false, cleanUrl, message: `לא ניתן להתחבר לשרת Home Assistant: ${err.message}` };
   }
 }
 
@@ -477,6 +493,7 @@ export async function createAndSyncAllHassEntities(data) {
   const status = calculateCompletionStatus(data);
   const createdEntities = [];
   const parentBypass = Boolean(hass.parentBypass);
+  let corsErrorCount = 0;
 
   const allowTv = (hass.targetScope === 'any' ? status.completedTasks > 0 : status.allCompleted) || parentBypass;
 
@@ -509,6 +526,9 @@ export async function createAndSyncAllHassEntities(data) {
       }
     } catch (err) {
       console.warn(`[Home Assistant] Failed to post entity ${entityId}:`, err.message);
+      if (err.name === 'TypeError' || err.message?.includes('Failed to fetch')) {
+        corsErrorCount++;
+      }
     }
   }
 
@@ -602,7 +622,7 @@ export async function createAndSyncAllHassEntities(data) {
 
   await Promise.all(postPromises);
 
-  // 7. Active TV Block Enforcement
+  // Active TV Block Enforcement
   if (hass.autoBlockTv && hass.tvEntityId) {
     try {
       const entityId = hass.tvEntityId.trim();
@@ -629,6 +649,16 @@ export async function createAndSyncAllHassEntities(data) {
     } catch (err) {
       console.warn(`[Home Assistant] Failed to enforce TV block on ${hass.tvEntityId}:`, err.message);
     }
+  }
+
+  if (createdEntities.length === 0 && corsErrorCount > 0) {
+    return {
+      ok: false,
+      isCorsError: true,
+      cleanUrl,
+      message: 'חסימת CORS בדפדפן: יש לאשר את הדומיין של האפליקציה ב-configuration.yaml ב-Home Assistant.',
+      corsOrigin: typeof window !== 'undefined' ? window.location.origin : 'https://kids-tasker-c0ef6.web.app'
+    };
   }
 
   return {
@@ -919,11 +949,18 @@ export async function addLovelaceCardToHass(data, origin = '', familyId = '') {
 
     ws.onerror = (err) => {
       cleanup();
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://kids-tasker-c0ef6.web.app';
       let extra = '';
       if (typeof window !== 'undefined' && window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
         extra = ' (שים לב: הדפדפן אינו מאפשר חיבור ws בלתי-מוצפן מתוך דף https. אנא השתמש בכתובת Nabu Casa https:// או העתק את ה-YAML ישירות למערכת)';
       }
-      resolve({ ok: false, message: `שגיאת חיבור ל-WebSocket: ${err.message || 'לא ניתן להתחבר לשרת'}${extra}` });
+      resolve({ 
+        ok: false, 
+        isCorsError: true,
+        cleanUrl,
+        corsOrigin: origin,
+        message: `שגיאת חיבור ל-WebSocket: ${err.message || 'לא ניתן להתחבר לשרת'}. ודא שהגדרת cors_allowed_origins ב-Home Assistant ושכתובת השרת נגישה.${extra}` 
+      });
     };
   });
 }

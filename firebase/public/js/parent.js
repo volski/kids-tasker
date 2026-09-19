@@ -4,7 +4,7 @@ import {
   loginWithGoogle, 
   logoutUser, 
   subscribeToAuth 
-} from './firebase-config.js?v=2.3.0';
+} from './firebase-config.js?v=2.3.1';
 import { 
   subscribeToFamily, 
   subscribeToDailyHistory, 
@@ -45,7 +45,7 @@ import {
   createAndSyncAllHassEntities,
   addLovelaceCardToHass,
   ICON_LABELS 
-} from './db.js?v=2.3.0';
+} from './db.js?v=2.3.1';
 
 let currentFamilyId = getStoredFamilyId();
 let currentData = null;
@@ -1295,6 +1295,17 @@ window.saveHassSettings = async function(e) {
   }
 };
 
+window.handleCopyCorsConfig = async function() {
+  const origin = window.location.origin || 'https://kids-tasker-c0ef6.web.app';
+  const yaml = `http:\n  cors_allowed_origins:\n    - ${origin}`;
+  try {
+    await navigator.clipboard.writeText(yaml);
+    showToast('הגדרת CORS הועתקה ללוח! 📋');
+  } catch (e) {
+    showToast('לא ניתן להעתיק ללוח אוטומטית', true);
+  }
+};
+
 window.handleTestHass = async function() {
   const url = document.getElementById('hass-url')?.value?.trim();
   const token = document.getElementById('hass-token')?.value?.trim();
@@ -1329,6 +1340,39 @@ window.handleTestHass = async function() {
       }
       resultEl.className = 'p-4 rounded-xl border bg-emerald-950/40 border-emerald-800 text-emerald-300 text-xs font-semibold';
       resultEl.innerHTML = `<span>✔ ${res.message}${res.warning ? `<br><span class="text-amber-300">⚠️ ${res.warning}</span>` : ''}${entityInfo}</span>`;
+    } else if (res.isCorsError) {
+      const origin = res.corsOrigin || window.location.origin;
+      showToast('נדרש אישור CORS ב-Home Assistant', true);
+      resultEl.className = 'p-5 rounded-2xl border bg-amber-950/40 border-amber-500/60 text-amber-200 text-xs space-y-3 shadow-xl';
+      resultEl.innerHTML = `
+        <div class="flex items-center gap-2 font-bold text-sm text-white">
+          <span>🛡️</span>
+          <span>נדרש אישור CORS ב-Home Assistant לחיבור ישיר מהדפדפן</span>
+        </div>
+        <p class="leading-relaxed text-amber-300">
+          הדפדפן חסם את הבקשה ל-<code>${res.cleanUrl || url}</code> מטעמי אבטחה (CORS policy).
+          <br>כדי לאפשר לדפדפן לבדוק חיבור, לסנכרן ישויות ולהוסיף כרטיס Lovelace בלחיצה – הוסף שורות אלו לקובץ <code>configuration.yaml</code> ב-Home Assistant והפעל אותו מחדש:
+        </p>
+        <div>
+          <pre class="p-3 bg-slate-950 rounded-xl border border-amber-900/60 font-mono text-emerald-400 text-xs dir-ltr text-left overflow-x-auto leading-relaxed">http:
+  cors_allowed_origins:
+    - ${origin}</pre>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button 
+            type="button" 
+            onclick="window.handleCopyCorsConfig()" 
+            class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow"
+          >
+            <span>📋</span>
+            <span>העתק הגדרת CORS</span>
+          </button>
+        </div>
+        <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300">
+          💡 <b>מעדיף לא לערוך את configuration.yaml?</b>
+          <br>תוכל להשתמש כבר עכשיו בקוד ה-<b>Lovelace Card YAML</b> ובקוד ה-<b>Automation YAML</b> שמופיעים למטה! מעתיקים אותם ישירות לתוך Home Assistant והם עובדים באופן מלא ועצמאי ללא צורך בשום חיבור ישיר מהדפדפן.
+        </div>
+      `;
     } else {
       showToast(res.message, true);
       resultEl.className = 'p-4 rounded-xl border bg-rose-950/40 border-rose-800 text-rose-300 text-xs font-semibold';
@@ -1358,6 +1402,35 @@ window.handleSyncHassEntities = async function() {
       if (resultEl) {
         resultEl.className = 'p-4 rounded-xl border bg-emerald-950/40 border-emerald-800 text-emerald-300 text-xs font-semibold';
         resultEl.innerHTML = `<span>✔ ${res.message} (${res.count} ישויות נוצרו/עודכנו)</span>`;
+        resultEl.classList.remove('hidden');
+      }
+    } else if (res.isCorsError) {
+      const origin = res.corsOrigin || window.location.origin;
+      showToast('נדרש אישור CORS ב-Home Assistant לסנכרון', true);
+      if (resultEl) {
+        resultEl.className = 'p-5 rounded-2xl border bg-amber-950/40 border-amber-500/60 text-amber-200 text-xs space-y-3 shadow-xl';
+        resultEl.innerHTML = `
+          <div class="flex items-center gap-2 font-bold text-sm text-white">
+            <span>🛡️</span>
+            <span>נדרש אישור CORS ב-Home Assistant לסנכרון ישויות ישיר</span>
+          </div>
+          <p class="leading-relaxed text-amber-300">
+            הדפדפן חסם את סנכרון הישויות מטעמי אבטחה (CORS). יש להוסיף לקובץ <code>configuration.yaml</code> ב-Home Assistant:
+          </p>
+          <pre class="p-3 bg-slate-950 rounded-xl border border-amber-900/60 font-mono text-emerald-400 text-xs dir-ltr text-left overflow-x-auto leading-relaxed">http:
+  cors_allowed_origins:
+    - ${origin}</pre>
+          <div class="flex flex-wrap items-center gap-2">
+            <button 
+              type="button" 
+              onclick="window.handleCopyCorsConfig()" 
+              class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow"
+            >
+              <span>📋</span>
+              <span>העתק הגדרת CORS</span>
+            </button>
+          </div>
+        `;
         resultEl.classList.remove('hidden');
       }
     } else {
@@ -1394,6 +1467,32 @@ window.handleAddLovelaceCard = async function() {
       if (feedbackEl) {
         feedbackEl.className = 'p-3.5 rounded-xl border bg-emerald-950/40 border-emerald-800 text-emerald-300 text-xs font-semibold';
         feedbackEl.innerHTML = `<span>✔ ${res.message}</span>`;
+      }
+    } else if (res.isCorsError) {
+      const origin = res.corsOrigin || window.location.origin;
+      showToast('נדרש אישור CORS ב-Home Assistant לחיבור WebSocket', true);
+      if (feedbackEl) {
+        feedbackEl.className = 'p-4 rounded-xl border bg-amber-950/40 border-amber-500/60 text-amber-200 text-xs space-y-2.5';
+        feedbackEl.innerHTML = `
+          <div class="font-bold text-white flex items-center gap-1.5">
+            <span>🛡️</span>
+            <span>חיבור ה-WebSocket נחסם עקב הגדרות אבטחה ב-Home Assistant</span>
+          </div>
+          <p class="text-amber-300">
+            כדי לאפשר הוספה אוטומטית של כרטיסים, יש להגדיר ב-<code>configuration.yaml</code>:
+          </p>
+          <pre class="p-2.5 bg-slate-950 rounded-lg border border-amber-900/60 font-mono text-emerald-400 text-xs dir-ltr text-left overflow-x-auto">http:
+  cors_allowed_origins:
+    - ${origin}</pre>
+          <div class="flex items-center gap-2">
+            <button onclick="window.handleCopyCorsConfig()" class="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg text-xs">
+              העתק הגדרה 📋
+            </button>
+            <button onclick="window.handleCopyCardYaml()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg text-xs">
+              או העתק קוד YAML ידנית 📋
+            </button>
+          </div>
+        `;
       }
     } else {
       showToast(res.message, true);
