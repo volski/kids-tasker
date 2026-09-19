@@ -1,10 +1,8 @@
-// Parent Dashboard Controller (Modular Firebase Edition)
+// Parent Dashboard & Onboarding Controller (Modular Firebase Edition)
 import { 
   getStoredFamilyId, 
   setStoredFamilyId, 
   loginWithGoogle, 
-  loginWithEmail, 
-  registerWithEmail, 
   logoutUser, 
   subscribeToAuth 
 } from './firebase-config.js';
@@ -23,6 +21,9 @@ import {
   saveHomeAssistantConfig, 
   calculateCompletionStatus, 
   getTodayDateString, 
+  getUserProfile, 
+  createFamilyForUser, 
+  joinFamilyWithCode, 
   ICON_LABELS 
 } from './db.js';
 
@@ -30,23 +31,32 @@ let currentFamilyId = getStoredFamilyId();
 let currentData = null;
 let currentTab = 'status';
 let currentUser = null;
+let familyUnsubscribe = null;
 
-// DOM Elements
+// DOM View Containers
+const authLanding = document.getElementById('auth-landing');
+const onboardingWizard = document.getElementById('onboarding-wizard');
+const appDashboard = document.getElementById('app-dashboard');
+
+// Header elements
 const statusBadge = document.getElementById('status-badge');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const familyIdDisplay = document.getElementById('family-id-display');
-const activeFamilyInput = document.getElementById('active-family-id');
+const dashboardFamilyName = document.getElementById('dashboard-family-name');
+const userAvatar = document.getElementById('user-avatar');
+const userDisplayName = document.getElementById('user-display-name');
 
 function updateConnectionStatus(isConnected) {
+  if (!statusBadge || !statusDot || !statusText) return;
   if (isConnected) {
-    statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50';
-    statusText.innerText = 'מחובר בזמן אמת';
-    statusBadge.className = 'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-950/60 border border-emerald-800/60 text-emerald-300';
+    statusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-400/50';
+    statusText.innerText = 'מחובר';
+    statusBadge.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-950/60 border border-emerald-800/60 text-emerald-300';
   } else {
-    statusDot.className = 'w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse';
-    statusText.innerText = 'מנותק - מתחבר...';
-    statusBadge.className = 'flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-rose-950/60 border border-rose-800/60 text-rose-300';
+    statusDot.className = 'w-2 h-2 rounded-full bg-rose-500 animate-pulse';
+    statusText.innerText = 'מתחבר...';
+    statusBadge.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-rose-950/60 border border-rose-800/60 text-rose-300';
   }
 }
 
@@ -65,7 +75,213 @@ export function showToast(message, isError = false) {
   }, 3000);
 }
 
-// Tab Switching
+// ==========================================
+// Authentication & View Switching
+// ==========================================
+
+export async function triggerGoogleLogin() {
+  try {
+    showToast('מתחבר ל-Google...');
+    const result = await loginWithGoogle();
+    const user = result.user;
+    showToast(`ברוך הבא, ${user.displayName || 'משתמש'}!`);
+  } catch (error) {
+    console.error('[Auth Error] Google login failed:', error);
+    showToast(error.message || 'שגיאה בהתחברות ל-Google', true);
+  }
+}
+window.triggerGoogleLogin = triggerGoogleLogin;
+
+export async function triggerLogout() {
+  if (!confirm('האם אתה בטוח שברצונך להתנתק?')) return;
+  if (familyUnsubscribe) familyUnsubscribe();
+  await logoutUser();
+  currentUser = null;
+  currentFamilyId = null;
+  setStoredFamilyId(null);
+  showView('auth');
+  showToast('התנתקת בהצלחה');
+}
+window.triggerLogout = triggerLogout;
+
+export async function triggerJoinFamily() {
+  const input = document.getElementById('join-family-code-input');
+  const code = input?.value?.trim();
+  if (!code) {
+    showToast('נא להזין קוד משפחה', true);
+    return;
+  }
+
+  if (!currentUser) {
+    showToast('יש להתחבר עם Google קודם כדי להצטרף למשפחה');
+    await triggerGoogleLogin();
+    if (!currentUser) return;
+  }
+
+  try {
+    showToast('מצטרף למשפחה...');
+    await joinFamilyWithCode(currentUser.uid, currentUser, code);
+    currentFamilyId = code;
+    setStoredFamilyId(code);
+    showToast('הצטרפת בהצלחה למשפחה! 🎉');
+    loadDashboardForFamily(code);
+  } catch (e) {
+    showToast(e.message, true);
+  }
+}
+window.triggerJoinFamily = triggerJoinFamily;
+
+function showView(viewName) {
+  authLanding.classList.add('hidden');
+  onboardingWizard.classList.add('hidden');
+  appDashboard.classList.add('hidden');
+
+  if (viewName === 'auth') {
+    authLanding.classList.remove('hidden');
+  } else if (viewName === 'onboarding') {
+    onboardingWizard.classList.remove('hidden');
+  } else if (viewName === 'dashboard') {
+    appDashboard.classList.remove('hidden');
+  }
+}
+
+// ==========================================
+// Onboarding Wizard Flow
+// ==========================================
+
+window.wizardGoToStep1 = function() {
+  document.getElementById('wizard-step-1').classList.remove('hidden');
+  document.getElementById('wizard-step-2').classList.add('hidden');
+  document.getElementById('wizard-step-3').classList.add('hidden');
+  document.getElementById('dot-step-1').className = 'w-3 h-3 rounded-full bg-indigo-500';
+  document.getElementById('dot-step-2').className = 'w-3 h-3 rounded-full bg-slate-800';
+  document.getElementById('dot-step-3').className = 'w-3 h-3 rounded-full bg-slate-800';
+};
+
+window.wizardGoToStep2 = function() {
+  const nameInput = document.getElementById('wizard-family-name');
+  if (!nameInput?.value?.trim()) {
+    showToast('נא להזין שם למשפחה', true);
+    nameInput.focus();
+    return;
+  }
+  document.getElementById('wizard-step-1').classList.add('hidden');
+  document.getElementById('wizard-step-2').classList.remove('hidden');
+  document.getElementById('wizard-step-3').classList.add('hidden');
+  document.getElementById('dot-step-1').className = 'w-3 h-3 rounded-full bg-emerald-500';
+  document.getElementById('dot-step-2').className = 'w-3 h-3 rounded-full bg-indigo-500';
+  document.getElementById('dot-step-3').className = 'w-3 h-3 rounded-full bg-slate-800';
+};
+
+window.wizardAddChildInput = function() {
+  const container = document.getElementById('wizard-children-inputs');
+  const count = container.querySelectorAll('.wizard-child-name').length + 1;
+  const div = document.createElement('div');
+  div.className = 'flex items-center gap-2';
+  div.innerHTML = `
+    <input 
+      type="text" 
+      placeholder="שם הילד/ה הבא (ילד ${count})..." 
+      class="wizard-child-name flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white"
+    >
+    <button type="button" onclick="this.parentElement.remove()" class="text-slate-500 hover:text-rose-400 p-2 text-sm">✖</button>
+  `;
+  container.appendChild(div);
+};
+
+window.wizardSubmitFamily = async function() {
+  const familyName = document.getElementById('wizard-family-name')?.value?.trim();
+  const childInputs = document.querySelectorAll('.wizard-child-name');
+  const childrenNames = [];
+  childInputs.forEach(input => {
+    if (input.value.trim()) childrenNames.push(input.value.trim());
+  });
+
+  if (childrenNames.length === 0) {
+    showToast('נא להזין לפחות שם של ילד אחד', true);
+    return;
+  }
+
+  const btn = document.getElementById('wizard-create-btn');
+  btn.disabled = true;
+  btn.innerText = 'מקים את הלוח בענן...';
+
+  try {
+    const { familyId } = await createFamilyForUser(currentUser.uid, currentUser, familyName, childrenNames);
+    currentFamilyId = familyId;
+    setStoredFamilyId(familyId);
+
+    // Show Step 3 (Success)
+    document.getElementById('wizard-step-1').classList.add('hidden');
+    document.getElementById('wizard-step-2').classList.add('hidden');
+    document.getElementById('wizard-step-3').classList.remove('hidden');
+    document.getElementById('dot-step-2').className = 'w-3 h-3 rounded-full bg-emerald-500';
+    document.getElementById('dot-step-3').className = 'w-3 h-3 rounded-full bg-emerald-500';
+
+    // Populate Success Screen
+    document.getElementById('wizard-result-family-id').innerText = familyId;
+    const tabletUrl = `${window.location.origin}/index.html?family=${familyId}`;
+    const qrImg = document.getElementById('wizard-qr-img');
+    if (qrImg) {
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(tabletUrl)}`;
+    }
+  } catch (e) {
+    showToast(e.message, true);
+    btn.disabled = false;
+    btn.innerText = 'צור לוח משפחתי 🚀';
+  }
+};
+
+window.copyFamilyId = function() {
+  const id = document.getElementById('wizard-result-family-id')?.innerText;
+  if (id) {
+    navigator.clipboard.writeText(id);
+    showToast('קוד המשפחה הועתק ללוח!');
+  }
+};
+
+window.copyTabletUrl = function() {
+  const tabletUrl = `${window.location.origin}/index.html?family=${currentFamilyId}`;
+  navigator.clipboard.writeText(tabletUrl);
+  showToast('הקישור לטאבלט הועתק! שלח אותו או פתח בטאבלט.');
+};
+
+window.finishOnboarding = function() {
+  loadDashboardForFamily(currentFamilyId);
+};
+
+// ==========================================
+// Tablet Pairing Modal
+// ==========================================
+
+window.openPairModal = function() {
+  const modal = document.getElementById('modal-pair-tablet');
+  const urlInput = document.getElementById('pair-tablet-url');
+  const qrImg = document.getElementById('pair-qr-img');
+  const tabletUrl = `${window.location.origin}/index.html?family=${currentFamilyId}`;
+
+  if (urlInput) urlInput.value = tabletUrl;
+  if (qrImg) qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(tabletUrl)}`;
+  if (modal) modal.classList.remove('hidden');
+};
+
+window.closePairModal = function() {
+  const modal = document.getElementById('modal-pair-tablet');
+  if (modal) modal.classList.add('hidden');
+};
+
+window.copyPairTabletUrl = function() {
+  const urlInput = document.getElementById('pair-tablet-url');
+  if (urlInput) {
+    navigator.clipboard.writeText(urlInput.value);
+    showToast('הקישור לטאבלט הועתק בהצלחה!');
+  }
+};
+
+// ==========================================
+// Dashboard Logic
+// ==========================================
+
 export function switchTab(tabId) {
   currentTab = tabId;
   const tabs = ['status', 'manage', 'history', 'hass', 'family'];
@@ -89,7 +305,6 @@ export function switchTab(tabId) {
 }
 window.switchTab = switchTab;
 
-// 1. Render Tab: Status
 function renderStatusTab(data) {
   const stats = calculateCompletionStatus(data);
   document.getElementById('stat-total').innerText = stats.totalTasks;
@@ -160,13 +375,12 @@ function renderStatusTab(data) {
   }).join('');
 }
 
-// 2. Render Tab: Manage Children & Tasks
 function renderManageTab(data) {
   const container = document.getElementById('manage-children-list');
   if (!container) return;
 
   if (!data.children || data.children.length === 0) {
-    container.innerHTML = '<p class="text-slate-500 text-center py-8">עדיין לא הוספת ילדים. השתמש בטופס למעלה להוספת ילד ראשון!</p>';
+    container.innerHTML = '<p class="text-slate-500 text-center py-8">עדיין לא הוספת ילדים. השתמש בטופס למעלה להוספת ילד!</p>';
     return;
   }
 
@@ -190,7 +404,6 @@ function renderManageTab(data) {
         </button>
       </div>
 
-      <!-- Add Task Form -->
       <form onsubmit="window.handleAddTask(event, '${child.id}')" class="flex flex-wrap gap-2.5 items-center">
         <input 
           type="text" 
@@ -214,7 +427,6 @@ function renderManageTab(data) {
         </button>
       </form>
 
-      <!-- Task Items -->
       <div class="space-y-2.5">
         ${(child.tasks || []).map(task => `
           <div class="flex items-center justify-between gap-3 p-3 bg-slate-800/40 border border-slate-800 rounded-xl hover:border-slate-700 transition">
@@ -248,7 +460,6 @@ function renderManageTab(data) {
   `).join('');
 }
 
-// 3. Render Tab: Home Assistant
 function renderHassTab(data) {
   const hass = data.homeAssistant || {};
   document.getElementById('hass-enabled').checked = Boolean(hass.enabled);
@@ -269,7 +480,6 @@ function renderHassTab(data) {
   }
 }
 
-// History Loader
 let historyUnsubscribe = null;
 function loadHistory(dateString) {
   if (historyUnsubscribe) historyUnsubscribe();
@@ -438,17 +648,22 @@ window.saveHassSettings = async function(e) {
 };
 
 window.switchFamily = function() {
-  const newId = activeFamilyInput?.value?.trim();
+  const input = document.getElementById('active-family-id');
+  const newId = input?.value?.trim();
   if (newId && newId !== currentFamilyId) {
     setStoredFamilyId(newId);
     window.location.reload();
   }
 };
 
-// Initialize
-function init() {
-  if (familyIdDisplay) familyIdDisplay.innerText = currentFamilyId;
-  if (activeFamilyInput) activeFamilyInput.value = currentFamilyId;
+function loadDashboardForFamily(familyId) {
+  currentFamilyId = familyId;
+  setStoredFamilyId(familyId);
+  showView('dashboard');
+
+  if (familyIdDisplay) familyIdDisplay.innerText = familyId;
+  const codeBadge = document.getElementById('family-code-badge');
+  if (codeBadge) codeBadge.innerText = familyId;
 
   const dateSelect = document.getElementById('history-date-select');
   if (dateSelect) {
@@ -456,17 +671,15 @@ function init() {
     dateSelect.addEventListener('change', () => loadHistory(dateSelect.value));
   }
 
-  subscribeToAuth(user => {
-    currentUser = user;
-    const userDisplay = document.getElementById('user-email-display');
-    if (userDisplay) {
-      userDisplay.innerText = user ? (user.email || 'משתמש מחובר') : 'אורח';
-    }
-  });
+  if (familyUnsubscribe) familyUnsubscribe();
+  updateConnectionStatus(false);
 
-  subscribeToFamily(currentFamilyId, data => {
+  familyUnsubscribe = subscribeToFamily(familyId, data => {
     currentData = data;
     updateConnectionStatus(true);
+    if (dashboardFamilyName && data.name) {
+      dashboardFamilyName.innerText = data.name;
+    }
     renderStatusTab(data);
     renderManageTab(data);
     renderHassTab(data);
@@ -476,7 +689,50 @@ function init() {
   });
 }
 
-// Run init immediately if DOM is already ready (top-level await support)
+// ==========================================
+// Initialization
+// ==========================================
+
+function init() {
+  updateConnectionStatus(false);
+
+  // Monitor Authentication State
+  subscribeToAuth(async user => {
+    currentUser = user;
+
+    if (!user) {
+      // User is logged out
+      showView('auth');
+      return;
+    }
+
+    // User is logged in with Google
+    if (userAvatar && user.photoURL) {
+      userAvatar.src = user.photoURL;
+      userAvatar.classList.remove('hidden');
+    }
+    if (userDisplayName) {
+      userDisplayName.innerText = user.displayName || user.email || 'הורה';
+    }
+
+    // Check user profile in Firestore
+    const profile = await getUserProfile(user.uid);
+    if (profile && profile.familyId) {
+      // User has existing family
+      loadDashboardForFamily(profile.familyId);
+    } else {
+      // New user -> Trigger Onboarding Wizard
+      showView('onboarding');
+      const nameInput = document.getElementById('wizard-family-name');
+      if (nameInput && user.displayName) {
+        const firstName = user.displayName.split(' ')[0];
+        nameInput.value = `משפחת ${firstName}`;
+      }
+    }
+  });
+}
+
+// Top-level await safe ready trigger
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {

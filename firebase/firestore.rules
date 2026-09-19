@@ -1,7 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Open access for family documents so tablets and parents can connect immediately
+    // User profile metadata
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+
+    // Family workspaces & data
     match /families/{familyId} {
       allow read, write: if true;
 

@@ -377,3 +377,113 @@ export async function saveHomeAssistantConfig(familyId, config) {
     homeAssistant: config
   });
 }
+
+// ==========================================
+// User Profile & Onboarding Operations
+// ==========================================
+
+// Get user profile from /users/{uid}
+export async function getUserProfile(uid) {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    const snap = await getDoc(userDocRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+    return null;
+  } catch (e) {
+    console.error('[UserProfile] Failed to fetch profile:', e);
+    return null;
+  }
+}
+
+// Create a new family and link to user profile
+export async function createFamilyForUser(uid, userMeta, familyName, childrenNames = []) {
+  // Generate a clean, readable family ID, e.g. fam-k8s9p2
+  const randomSuffix = Math.random().toString(36).substring(2, 8);
+  const cleanPrefix = (familyName || 'family')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .substring(0, 10);
+  const familyId = `fam_${cleanPrefix ? cleanPrefix + '_' : ''}${randomSuffix}`;
+
+  const starterTasks = [
+    { id: "t1", title: "צחצוח שיניים", completed: false, completedAt: null, icon: "toothbrush" },
+    { id: "t2", title: "התלבשות לבד", completed: false, completedAt: null, icon: "clothes" },
+    { id: "t3", title: "סידור תיק", completed: false, completedAt: null, icon: "backpack" }
+  ];
+
+  const validChildren = (childrenNames.length > 0 ? childrenNames : ['ילד 1']).map((name, idx) => ({
+    id: `child_${Date.now()}_${idx + 1}`,
+    name: name.trim() || `ילד ${idx + 1}`,
+    tasks: JSON.parse(JSON.stringify(starterTasks))
+  }));
+
+  const familyData = {
+    id: familyId,
+    name: familyName ? familyName.trim() : 'המשפחה שלנו',
+    ownerUid: uid,
+    parents: [uid],
+    createdAt: new Date().toISOString(),
+    lastActiveDate: getTodayDateString(),
+    children: validChildren,
+    homeAssistant: {
+      enabled: false,
+      url: 'http://homeassistant.local:8123',
+      token: '',
+      tvEntityId: 'switch.tv_socket',
+      autoBlockTv: true,
+      pollIntervalSeconds: 30,
+      targetScope: 'all',
+      parentBypass: false
+    }
+  };
+
+  // 1. Create family document
+  const familyRef = doc(db, 'families', familyId);
+  await setDoc(familyRef, familyData);
+
+  // 2. Link familyId in user profile
+  const userRef = doc(db, 'users', uid);
+  await setDoc(userRef, {
+    uid: uid,
+    email: userMeta.email || '',
+    displayName: userMeta.displayName || '',
+    photoURL: userMeta.photoURL || '',
+    familyId: familyId,
+    role: 'parent',
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  return { familyId, familyData };
+}
+
+// Join an existing family with a code
+export async function joinFamilyWithCode(uid, userMeta, familyId) {
+  const familyRef = doc(db, 'families', familyId);
+  const snap = await getDoc(familyRef);
+  if (!snap.exists()) {
+    throw new Error(`קוד משפחה "${familyId}" לא נמצא. בדוק את הקוד ונסה שוב.`);
+  }
+
+  const data = snap.data();
+  const parents = data.parents || [];
+  if (!parents.includes(uid)) {
+    parents.push(uid);
+    await updateDoc(familyRef, { parents });
+  }
+
+  // Link in user profile
+  const userRef = doc(db, 'users', uid);
+  await setDoc(userRef, {
+    uid: uid,
+    email: userMeta.email || '',
+    displayName: userMeta.displayName || '',
+    photoURL: userMeta.photoURL || '',
+    familyId: familyId,
+    role: 'parent',
+    updatedAt: serverTimestamp()
+  }, { merge: true });
+
+  return { familyId, familyData: data };
+}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>לוח ניהול הורים - משימות ילדים | Kids Tasker</title>
+  <title>לוח ניהול הורים | Kids Tasker</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,240 +13,477 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-full flex flex-col selection:bg-indigo-500 selection:text-white">
 
-  <!-- Header -->
-  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-30 px-4 sm:px-8 py-4 shadow-md">
-    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-      <div class="flex items-center space-x-3 space-x-reverse">
-        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-2xl shadow-lg shadow-indigo-900/30">
-          👑
+  <!-- ========================================== -->
+  <!-- 1. AUTH / WELCOME LANDING (Logged Out)     -->
+  <!-- ========================================== -->
+  <div id="auth-landing" class="hidden flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
+    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
+      <div class="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 flex items-center justify-center text-4xl shadow-xl shadow-indigo-900/40">
+        ⭐
+      </div>
+      
+      <div>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">Kids Tasker</h1>
+        <p class="text-slate-400 text-sm mt-2">לוח משימות יומי חכם לילדים, מעקב הרגלים וסנכרון בזמן אמת</p>
+      </div>
+
+      <!-- Feature Badges -->
+      <div class="grid grid-cols-1 gap-2.5 text-right text-xs text-slate-300 bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <span class="text-base">📱</span>
+          <span><b>לוח טאבלט אינטראקטיבי:</b> סנכרון חי בין מסכים עם אייקונים עשירים</span>
         </div>
-        <div>
-          <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-            <span>לוח ניהול הורים</span>
-            <span id="family-id-display" class="text-xs sm:text-sm font-semibold text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2.5 py-0.5 rounded-full"></span>
-          </h1>
-          <p class="text-xs sm:text-sm text-slate-400 font-medium">מעקב משימות, עריכה, יומן היסטוריה ואינטגרציית בית חכם</p>
+        <div class="flex items-center gap-2.5">
+          <span class="text-base">🔒</span>
+          <span><b>חוק כיוון אחד:</b> ילדים מסמנים בוצע, רק הורים מבטלים או עורכים</span>
+        </div>
+        <div class="flex items-center gap-2.5">
+          <span class="text-base">📺</span>
+          <span><b>נעילת טלוויזיה חכמה:</b> חיבור ישיר ל-Home Assistant למניעת מסכים</span>
         </div>
       </div>
 
-      <div class="flex items-center gap-2 sm:gap-3">
-        <button onclick="window.confirmResetDay()" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/50 shadow-sm transition flex items-center gap-1.5" title="איפוס משימות להיום בלבד - שומר את כל שמות הילדים וההיסטוריה!">
-          <span>🔄</span>
-          <span>איפוס ליום חדש</span>
+      <!-- Google Sign In Button -->
+      <div class="space-y-3 pt-2">
+        <button 
+          onclick="window.triggerGoogleLogin()" 
+          class="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-bold px-5 py-3.5 rounded-2xl shadow-xl transition-all duration-200 hover:scale-[1.01] active:scale-[0.98]"
+        >
+          <svg class="w-5 h-5" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span>התחבר באמצעות Google</span>
         </button>
 
-        <a href="/index.html" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-sm transition flex items-center gap-1.5">
-          <span>📱</span>
-          <span>לוח ילדים (טאבלט)</span>
-        </a>
-
-        <div id="status-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">
-          <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
-          <span id="status-text" class="hidden sm:inline">מתחבר...</span>
+        <!-- Join Existing Family Button -->
+        <div class="pt-3 border-t border-slate-800 text-xs text-slate-400">
+          <p class="mb-2">רוצים להצטרף למשפחה קיימת?</p>
+          <div class="flex gap-2">
+            <input 
+              type="text" 
+              id="join-family-code-input" 
+              placeholder="הזן קוד משפחה (לדוגמה: fam_abc123)..."
+              class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+            >
+            <button 
+              onclick="window.triggerJoinFamily()" 
+              class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition"
+            >
+              הצטרף
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </header>
-
-  <!-- Navigation Tabs -->
-  <div class="bg-slate-900 border-b border-slate-800 px-4 sm:px-8">
-    <div class="max-w-7xl mx-auto flex gap-2 sm:gap-4 overflow-x-auto py-2">
-      <button onclick="window.switchTab('status')" id="tab-btn-status" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-indigo-600 text-white shadow-md">
-        <span>📊</span>
-        <span>סטטוס משימות היום</span>
-      </button>
-      <button onclick="window.switchTab('manage')" id="tab-btn-manage" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
-        <span>✏️</span>
-        <span>ניהול ילדים ומשימות</span>
-      </button>
-      <button onclick="window.switchTab('history')" id="tab-btn-history" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
-        <span>📅</span>
-        <span>היסטוריית משימות</span>
-      </button>
-      <button onclick="window.switchTab('hass')" id="tab-btn-hass" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
-        <span>🏠</span>
-        <span>בית חכם (Home Assistant)</span>
-      </button>
-      <button onclick="window.switchTab('family')" id="tab-btn-family" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
-        <span>👨‍👩‍👧‍👦</span>
-        <span>הגדרות משפחה</span>
-      </button>
     </div>
   </div>
 
-  <!-- Main Content Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-
-    <!-- Tab 1: Live Status -->
-    <div id="view-status" class="space-y-6">
-      <!-- Metric Cards -->
-      <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-          <p class="text-xs text-slate-400 font-bold mb-1">סה״כ משימות</p>
-          <p id="stat-total" class="text-2xl font-black text-white">0</p>
-        </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-          <p class="text-xs text-emerald-400 font-bold mb-1">הושלמו</p>
-          <p id="stat-completed" class="text-2xl font-black text-emerald-400">0</p>
-        </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-          <p class="text-xs text-rose-400 font-bold mb-1">נותרו לביצוע</p>
-          <p id="stat-remaining" class="text-2xl font-black text-rose-400">0</p>
-        </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-          <p class="text-xs text-indigo-400 font-bold mb-1">אחוז ביצוע</p>
-          <p id="stat-percentage" class="text-2xl font-black text-indigo-400">0%</p>
-        </div>
-        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl col-span-2 sm:col-span-1">
-          <p class="text-xs text-slate-400 font-bold mb-1">סטטוס טלוויזיה</p>
-          <p id="stat-tv-status" class="text-lg font-bold text-slate-300">בבדיקה...</p>
-        </div>
+  <!-- ========================================== -->
+  <!-- 2. ONBOARDING WIZARD (New Users)           -->
+  <!-- ========================================== -->
+  <div id="onboarding-wizard" class="hidden flex-1 flex flex-col items-center justify-center p-4 sm:p-8">
+    <div class="max-w-lg w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+      
+      <!-- Wizard Progress Dots -->
+      <div class="flex items-center justify-center gap-2">
+        <span id="dot-step-1" class="w-3 h-3 rounded-full bg-indigo-500"></span>
+        <span class="w-8 h-0.5 bg-slate-800"></span>
+        <span id="dot-step-2" class="w-3 h-3 rounded-full bg-slate-800"></span>
+        <span class="w-8 h-0.5 bg-slate-800"></span>
+        <span id="dot-step-3" class="w-3 h-3 rounded-full bg-slate-800"></span>
       </div>
 
-      <!-- Children Live Lists -->
-      <div id="status-children-list" class="space-y-4">
-        <!-- Rendered via parent.js -->
-      </div>
-    </div>
-
-    <!-- Tab 2: Manage Children & Tasks -->
-    <div id="view-manage" class="hidden space-y-6">
-      <!-- Add Child Card -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
-        <h2 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
-          <span>➕</span>
-          <span>הוספת ילד חדש</span>
-        </h2>
-        <form onsubmit="window.handleAddChild(event)" class="flex gap-3">
+      <!-- Step 1: Family Name -->
+      <div id="wizard-step-1" class="space-y-4">
+        <div class="text-center">
+          <h2 class="text-2xl font-black text-white">שלב 1: שם המשפחה 🏠</h2>
+          <p class="text-slate-400 text-xs mt-1">איך נקרא ללוח המשימות שלכם?</p>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1.5">שם המשפחה:</label>
           <input 
             type="text" 
-            id="new-child-name" 
-            placeholder="שם הילד (לדוגמה: יונתן)..." 
-            required 
-            class="flex-1 bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-white placeholder-slate-500"
-          >
-          <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition">
-            הוסף ילד
-          </button>
-        </form>
-      </div>
-
-      <!-- Manage Children List -->
-      <div id="manage-children-list" class="space-y-6">
-        <!-- Injected via parent.js -->
-      </div>
-    </div>
-
-    <!-- Tab 3: History & Logs -->
-    <div id="view-history" class="hidden space-y-6">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 class="text-lg font-bold text-white">יומן פעילות היסטורי</h2>
-          <p class="text-xs text-slate-400">מעקב אחר שעת ביצוע כל משימה על ידי הילדים</p>
-        </div>
-        <div class="flex items-center gap-2">
-          <label for="history-date-select" class="text-sm text-slate-300 font-semibold">בחר תאריך:</label>
-          <input 
-            type="date" 
-            id="history-date-select" 
-            class="bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-1.5 text-sm"
+            id="wizard-family-name" 
+            placeholder="לדוגמה: משפחת ישראלי" 
+            class="w-full bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-2xl px-4 py-3 text-white text-base"
           >
         </div>
+        <button 
+          onclick="window.wizardGoToStep2()" 
+          class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow transition"
+        >
+          המשך לשלב הבא &larr;
+        </button>
       </div>
 
-      <div id="history-logs-list" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-2.5">
-        <!-- Rendered via parent.js -->
-      </div>
-    </div>
+      <!-- Step 2: Add Children -->
+      <div id="wizard-step-2" class="hidden space-y-4">
+        <div class="text-center">
+          <h2 class="text-2xl font-black text-white">שלב 2: שמות הילדים 👶</h2>
+          <p class="text-slate-400 text-xs mt-1">הזן את שמות הילדים שיהיו בלוח המשימות</p>
+        </div>
 
-    <!-- Tab 4: Home Assistant Integration -->
-    <div id="view-hass" class="hidden space-y-6">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
-        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
-          <div>
-            <h2 class="text-xl font-bold text-white flex items-center gap-2">
-              <span>🏠</span>
-              <span>הגדרות חיבור Home Assistant</span>
-            </h2>
-            <p class="text-xs sm:text-sm text-slate-400 mt-1">
-              בקרת נעילת טלוויזיה אוטומטית וסנכרון ישויות וירטואליות
-            </p>
+        <div id="wizard-children-inputs" class="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+          <div class="flex items-center gap-2">
+            <input 
+              type="text" 
+              placeholder="שם הילד/ה הראשון (לדוגמה: אורי)..." 
+              class="wizard-child-name flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white"
+            >
           </div>
-          <!-- Parent Bypass Button -->
+        </div>
+
+        <button 
+          type="button" 
+          onclick="window.wizardAddChildInput()" 
+          class="text-xs text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1.5"
+        >
+          <span>➕</span>
+          <span>הוסף עוד ילד/ה</span>
+        </button>
+
+        <div class="p-3 bg-slate-800/40 rounded-xl border border-slate-800 text-xs text-slate-400">
+          💡 כל ילד יתחיל עם 3 משימות ברירת מחדל: 🪥 צחצוח שיניים, 👕 התלבשות, ו-🎒 סידור תיק. תוכל לשנותן בכל עת.
+        </div>
+
+        <div class="flex gap-2.5">
           <button 
-            type="button"
-            id="hass-bypass-toggle-btn"
-            onclick="window.toggleParentBypass()" 
-            class="px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-2"
+            onclick="window.wizardGoToStep1()" 
+            class="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl text-sm"
           >
-            <span>🔒</span>
-            <span>מעקף הורים כבוי (לחץ להפעלה)</span>
+            חזור
+          </button>
+          <button 
+            id="wizard-create-btn"
+            onclick="window.wizardSubmitFamily()" 
+            class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl shadow transition"
+          >
+            צור לוח משפחתי 🚀
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3: Success & Connect Tablet -->
+      <div id="wizard-step-3" class="hidden text-center space-y-5">
+        <div class="w-16 h-16 mx-auto rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl">
+          🎉
+        </div>
+        <div>
+          <h2 class="text-2xl font-black text-white">המשפחה מוכנה!</h2>
+          <p class="text-slate-400 text-xs mt-1">הלוח הוקם בהצלחה בענן Google Firestore</p>
+        </div>
+
+        <!-- Family Code Box -->
+        <div class="bg-slate-800/70 p-4 rounded-2xl border border-slate-700 space-y-2 text-right">
+          <p class="text-xs text-slate-400 font-bold">קוד המשפחה שלכם:</p>
+          <div class="flex items-center justify-between gap-2 bg-slate-900 px-3.5 py-2 rounded-xl border border-slate-800">
+            <span id="wizard-result-family-id" class="font-mono text-indigo-300 font-bold text-sm"></span>
+            <button onclick="window.copyFamilyId()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg">העתק</button>
+          </div>
+        </div>
+
+        <!-- QR Code & Direct Link -->
+        <div class="bg-slate-800/40 p-4 rounded-2xl border border-slate-800 flex flex-col items-center gap-3">
+          <p class="text-xs text-slate-300 font-bold">פתח על טאבלט הילדים:</p>
+          <div class="bg-white p-2.5 rounded-2xl shadow-lg">
+            <img id="wizard-qr-img" class="w-36 h-36" alt="QR Code">
+          </div>
+          <button onclick="window.copyTabletUrl()" class="text-xs text-indigo-400 hover:underline font-semibold">
+            📋 העתק קישור ישיר לטאבלט
           </button>
         </div>
 
-        <form onsubmit="window.saveHassSettings(event)" class="space-y-4">
-          <div class="flex items-center gap-3">
-            <input type="checkbox" id="hass-enabled" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500">
-            <label for="hass-enabled" class="text-sm font-bold text-white">הפעל אינטגרציה עם Home Assistant</label>
-          </div>
+        <button 
+          onclick="window.finishOnboarding()" 
+          class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-xl transition"
+        >
+          כניסה ללוח ניהול ההורים &larr;
+        </button>
+      </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="hass-url" class="block text-xs font-bold text-slate-400 mb-1">כתובת השרת (URL / Nabu Casa):</label>
-              <input type="text" id="hass-url" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500">
-            </div>
-            <div>
-              <label for="hass-token" class="block text-xs font-bold text-slate-400 mb-1">Long-Lived Access Token:</label>
-              <input type="password" id="hass-token" placeholder="הדבק טוקן גישה..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500">
-            </div>
-          </div>
+    </div>
+  </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="hass-entity" class="block text-xs font-bold text-slate-400 mb-1">ישות טלוויזיה (Switch / Media Player):</label>
-              <input type="text" id="hass-entity" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white">
-            </div>
-            <div class="flex items-center gap-3 pt-5">
-              <input type="checkbox" id="hass-autoblock" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500">
-              <label for="hass-autoblock" class="text-sm font-bold text-white">חסימת טלוויזיה אוטומטית (Active TV Block)</label>
-            </div>
+  <!-- ========================================== -->
+  <!-- 3. MAIN PARENT DASHBOARD (Authenticated)   -->
+  <!-- ========================================== -->
+  <div id="app-dashboard" class="hidden flex-1 flex flex-col">
+    <!-- Header -->
+    <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-30 px-4 sm:px-8 py-3.5 shadow-md">
+      <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+        
+        <!-- Left: Logo & Family Title -->
+        <div class="flex items-center space-x-3 space-x-reverse">
+          <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-900/30">
+            👑
           </div>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              <span id="dashboard-family-name">לוח ניהול הורים</span>
+              <span id="family-id-display" class="text-xs font-semibold text-purple-300 bg-purple-950/60 border border-purple-800/60 px-2 py-0.5 rounded-full"></span>
+            </h1>
+            <p class="text-xs text-slate-400 font-medium">מעקב משימות, עריכה, יומן היסטוריה ואינטגרציית בית חכם</p>
+          </div>
+        </div>
 
-          <div class="pt-3">
-            <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition">
-              שמור הגדרות
+        <!-- Right: Actions & User Profile -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Reset Day Button -->
+          <button onclick="window.confirmResetDay()" class="px-3 py-2 rounded-xl text-xs font-bold bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/50 shadow-sm transition flex items-center gap-1.5" title="איפוס משימות להיום בלבד - שומר את כל שמות הילדים וההיסטוריה!">
+            <span>🔄</span>
+            <span>איפוס ליום חדש</span>
+          </button>
+
+          <!-- Pair Tablet Modal Trigger -->
+          <button onclick="window.openPairModal()" class="px-3 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white border border-purple-500/50 shadow-sm transition flex items-center gap-1.5" title="חבר טאבלט עם קוד QR או קישור ישיר">
+            <span>📱</span>
+            <span>חבר טאבלט</span>
+          </button>
+
+          <a href="/index.html" class="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-sm transition">
+            <span>👀</span>
+            <span>צפה בלוח</span>
+          </a>
+
+          <!-- User Profile & Logout -->
+          <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-700/80 rounded-xl px-2.5 py-1.5">
+            <img id="user-avatar" class="w-6 h-6 rounded-full object-cover hidden" alt="Avatar">
+            <span id="user-display-name" class="text-xs font-bold text-slate-200 truncate max-w-[100px]">משתמש</span>
+            <button onclick="window.triggerLogout()" class="text-slate-400 hover:text-rose-400 text-xs font-bold px-1 transition" title="התנתק מהחשבון">
+              🚪
             </button>
           </div>
-        </form>
+
+          <!-- Connection dot -->
+          <div id="status-badge" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">
+            <span id="status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="status-text" class="hidden md:inline">מתחבר...</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="bg-slate-900 border-b border-slate-800 px-4 sm:px-8">
+      <div class="max-w-7xl mx-auto flex gap-2 sm:gap-4 overflow-x-auto py-2">
+        <button onclick="window.switchTab('status')" id="tab-btn-status" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-indigo-600 text-white shadow-md">
+          <span>📊</span>
+          <span>סטטוס משימות היום</span>
+        </button>
+        <button onclick="window.switchTab('manage')" id="tab-btn-manage" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <span>✏️</span>
+          <span>ניהול ילדים ומשימות</span>
+        </button>
+        <button onclick="window.switchTab('history')" id="tab-btn-history" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <span>📅</span>
+          <span>היסטוריית משימות</span>
+        </button>
+        <button onclick="window.switchTab('hass')" id="tab-btn-hass" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <span>🏠</span>
+          <span>בית חכם (Home Assistant)</span>
+        </button>
+        <button onclick="window.switchTab('family')" id="tab-btn-family" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <span>👨‍👩‍👧‍👦</span>
+          <span>הגדרות משפחה</span>
+        </button>
       </div>
     </div>
 
-    <!-- Tab 5: Family & Multi-Tenant Settings -->
-    <div id="view-family" class="hidden space-y-6">
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
-        <h2 class="text-xl font-bold text-white flex items-center gap-2">
-          <span>👨‍👩‍👧‍👦</span>
-          <span>החלפת מרחב עבודה משפחתי (Family Workspace)</span>
-        </h2>
-        <p class="text-sm text-slate-400">
-          כל משפחה ב-Kids Tasker מקבלת מזהה משפחה ייחודי. ניתן לעבור בין משפחות או לחבר טאבלטים מרוחקים באמצעות הזנת מזהה המשפחה.
-        </p>
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
 
-        <div class="flex flex-wrap gap-3 items-center">
-          <input 
-            type="text" 
-            id="active-family-id" 
-            placeholder="הזן מזהה משפחה (לדוגמה: cohen-family)..."
-            class="flex-1 min-w-[240px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white"
-          >
-          <button onclick="window.switchFamily()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow transition">
-            החלף משפחה
-          </button>
+      <!-- Tab 1: Live Status -->
+      <div id="view-status" class="space-y-6">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+            <p class="text-xs text-slate-400 font-bold mb-1">סה״כ משימות</p>
+            <p id="stat-total" class="text-2xl font-black text-white">0</p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+            <p class="text-xs text-emerald-400 font-bold mb-1">הושלמו</p>
+            <p id="stat-completed" class="text-2xl font-black text-emerald-400">0</p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+            <p class="text-xs text-rose-400 font-bold mb-1">נותרו לביצוע</p>
+            <p id="stat-remaining" class="text-2xl font-black text-rose-400">0</p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+            <p class="text-xs text-indigo-400 font-bold mb-1">אחוז ביצוע</p>
+            <p id="stat-percentage" class="text-2xl font-black text-indigo-400">0%</p>
+          </div>
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl col-span-2 sm:col-span-1">
+            <p class="text-xs text-slate-400 font-bold mb-1">סטטוס טלוויזיה</p>
+            <p id="stat-tv-status" class="text-lg font-bold text-slate-300">בבדיקה...</p>
+          </div>
+        </div>
+
+        <!-- Children Live Lists -->
+        <div id="status-children-list" class="space-y-4"></div>
+      </div>
+
+      <!-- Tab 2: Manage Children & Tasks -->
+      <div id="view-manage" class="hidden space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <h2 class="text-lg font-bold text-white mb-3 flex items-center gap-2">
+            <span>➕</span>
+            <span>הוספת ילד חדש</span>
+          </h2>
+          <form onsubmit="window.handleAddChild(event)" class="flex gap-3">
+            <input 
+              type="text" 
+              id="new-child-name" 
+              placeholder="שם הילד (לדוגמה: יונתן)..." 
+              required 
+              class="flex-1 bg-slate-800 border border-slate-700 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-white placeholder-slate-500"
+            >
+            <button type="submit" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition">
+              הוסף ילד
+            </button>
+          </form>
+        </div>
+
+        <div id="manage-children-list" class="space-y-6"></div>
+      </div>
+
+      <!-- Tab 3: History & Logs -->
+      <div id="view-history" class="hidden space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">יומן פעילות היסטורי</h2>
+            <p class="text-xs text-slate-400">מעקב אחר שעת ביצוע כל משימה על ידי הילדים</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <label for="history-date-select" class="text-sm text-slate-300 font-semibold">בחר תאריך:</label>
+            <input 
+              type="date" 
+              id="history-date-select" 
+              class="bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-1.5 text-sm"
+            >
+          </div>
+        </div>
+
+        <div id="history-logs-list" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-2.5"></div>
+      </div>
+
+      <!-- Tab 4: Home Assistant Integration -->
+      <div id="view-hass" class="hidden space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+            <div>
+              <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                <span>🏠</span>
+                <span>הגדרות חיבור Home Assistant</span>
+              </h2>
+              <p class="text-xs sm:text-sm text-slate-400 mt-1">
+                בקרת נעילת טלוויזיה אוטומטית וסנכרון ישויות וירטואליות
+              </p>
+            </div>
+            <button 
+              type="button"
+              id="hass-bypass-toggle-btn"
+              onclick="window.toggleParentBypass()" 
+              class="px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-2"
+            >
+              <span>🔒</span>
+              <span>מעקף כבוי (לחץ להפעלה)</span>
+            </button>
+          </div>
+
+          <form onsubmit="window.saveHassSettings(event)" class="space-y-4">
+            <div class="flex items-center gap-3">
+              <input type="checkbox" id="hass-enabled" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500">
+              <label for="hass-enabled" class="text-sm font-bold text-white">הפעל אינטגרציה עם Home Assistant</label>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label for="hass-url" class="block text-xs font-bold text-slate-400 mb-1">כתובת השרת (URL / Nabu Casa):</label>
+                <input type="text" id="hass-url" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500">
+              </div>
+              <div>
+                <label for="hass-token" class="block text-xs font-bold text-slate-400 mb-1">Long-Lived Access Token:</label>
+                <input type="password" id="hass-token" placeholder="הדבק טוקן גישה..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label for="hass-entity" class="block text-xs font-bold text-slate-400 mb-1">ישות טלוויזיה (Switch / Media Player):</label>
+                <input type="text" id="hass-entity" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white">
+              </div>
+              <div class="flex items-center gap-3 pt-5">
+                <input type="checkbox" id="hass-autoblock" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500">
+                <label for="hass-autoblock" class="text-sm font-bold text-white">חסימת טלוויזיה אוטומטית (Active TV Block)</label>
+              </div>
+            </div>
+
+            <div class="pt-3">
+              <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition">
+                שמור הגדרות
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Tab 5: Family & Multi-Tenant Settings -->
+      <div id="view-family" class="hidden space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <span>👨‍👩‍👧‍👦</span>
+            <span>החלפת מרחב עבודה משפחתי (Family Workspace)</span>
+          </h2>
+          <p class="text-sm text-slate-400">
+            קוד המשפחה הנוכחי שלכם הוא: <b id="family-code-badge" class="font-mono text-indigo-300"></b>.
+          </p>
+
+          <div class="flex flex-wrap gap-3 items-center">
+            <input 
+              type="text" 
+              id="active-family-id" 
+              placeholder="הזן קוד משפחה אחר..."
+              class="flex-1 min-w-[240px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white"
+            >
+            <button onclick="window.switchFamily()" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl shadow transition">
+              החלף משפחה
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 4. PAIR TABLET MODAL                       -->
+  <!-- ========================================== -->
+  <div id="modal-pair-tablet" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-center space-y-5 relative">
+      <button onclick="window.closePairModal()" class="absolute top-4 left-4 text-slate-400 hover:text-white p-2">✕</button>
+
+      <div class="w-14 h-14 mx-auto rounded-2xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center text-3xl">
+        📱
+      </div>
+      <div>
+        <h3 class="text-xl font-black text-white">חיבור טאבלט לוח משימות</h3>
+        <p class="text-slate-400 text-xs mt-1">סרוק את הקוד באמצעות מצלמת הטאבלט כדי לחבר אותו מיד ללא סיסמה</p>
+      </div>
+
+      <div class="bg-white p-3 rounded-2xl inline-block shadow-lg">
+        <img id="pair-qr-img" class="w-44 h-44" alt="QR Code">
+      </div>
+
+      <div class="text-right space-y-1.5">
+        <label class="block text-xs font-bold text-slate-400">קישור ישיר לטאבלט:</label>
+        <div class="flex gap-2">
+          <input id="pair-tablet-url" readonly class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 font-mono truncate">
+          <button onclick="window.copyPairTabletUrl()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs">העתק</button>
         </div>
       </div>
     </div>
-
-  </main>
+  </div>
 
   <!-- Toast Notification -->
   <div id="toast" class="hidden"></div>

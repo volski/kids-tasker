@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "kids-tasker-c0ef6",
+    "production": "kids-tasker-c0ef6"
+  },
+  "targets": {},
+  "etags": {}
+}
