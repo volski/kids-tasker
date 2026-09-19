@@ -275,6 +275,9 @@ function init() {
     updateConnectionStatus(false);
     console.error('[Tablet] Subscription error:', err);
   });
+// Run init immediately if DOM is already ready (top-level await support)
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
 }
-
-window.addEventListener('DOMContentLoaded', init);
