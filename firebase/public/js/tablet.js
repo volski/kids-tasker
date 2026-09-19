@@ -4,7 +4,7 @@ import {
   loginWithGoogle, 
   logoutUser, 
   subscribeToAuth 
-} from './firebase-config.js?v=2.2.0';
+} from './firebase-config.js?v=2.3.0';
 import { 
   subscribeToFamily, 
   toggleTask, 
@@ -14,7 +14,7 @@ import {
   cancelJoinRequest,
   claimFamilyIfUnowned,
   registerTabletRequest
-} from './db.js?v=2.2.0';
+} from './db.js?v=2.3.0';
 
 // DOM Elements
 const authLanding = document.getElementById('auth-landing');

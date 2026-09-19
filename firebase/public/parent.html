@@ -477,6 +477,7 @@
 
       <!-- Tab 4: Home Assistant Integration -->
       <div id="view-hass" class="hidden space-y-6">
+        <!-- Card 1: Connection & Core Settings -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
           <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
             <div>
@@ -485,54 +486,315 @@
                 <span>הגדרות חיבור Home Assistant</span>
               </h2>
               <p class="text-xs sm:text-sm text-slate-400 mt-1">
-                בקרת נעילת טלוויזיה אוטומטית וסנכרון ישויות וירטואליות
+                בקרת נעילת טלוויזיה אוטומטית, בדיקת קישוריות וסנכרון ישויות וירטואליות
               </p>
             </div>
             <button 
               type="button"
               id="hass-bypass-toggle-btn"
               onclick="window.toggleParentBypass()" 
-              class="px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-2"
+              class="px-4 py-2.5 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-2 shadow"
             >
               <span>🔒</span>
               <span>מעקף כבוי (לחץ להפעלה)</span>
             </button>
           </div>
 
-          <form onsubmit="window.saveHassSettings(event)" class="space-y-4">
-            <div class="flex items-center gap-3">
-              <input type="checkbox" id="hass-enabled" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500">
-              <label for="hass-enabled" class="text-sm font-bold text-white">הפעל אינטגרציה עם Home Assistant</label>
+          <form onsubmit="window.saveHassSettings(event)" class="space-y-5">
+            <div class="flex items-center gap-3 p-3 bg-slate-800/60 rounded-xl border border-slate-700/60">
+              <input type="checkbox" id="hass-enabled" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+              <label for="hass-enabled" class="text-sm font-bold text-white cursor-pointer">הפעל אינטגרציה עם Home Assistant</label>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label for="hass-url" class="block text-xs font-bold text-slate-400 mb-1">כתובת השרת (URL / Nabu Casa):</label>
-                <input type="text" id="hass-url" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500">
+                <input 
+                  type="text" 
+                  id="hass-url" 
+                  placeholder="http://homeassistant.local:8123 או Nabu Casa URL" 
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 font-mono"
+                >
+                <span class="text-[11px] text-slate-500 mt-0.5 block">כתובת השרת המקומית או כתובת הענן מ-Nabu Casa</span>
               </div>
               <div>
                 <label for="hass-token" class="block text-xs font-bold text-slate-400 mb-1">Long-Lived Access Token:</label>
-                <input type="password" id="hass-token" placeholder="הדבק טוקן גישה..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500">
+                <input 
+                  type="password" 
+                  id="hass-token" 
+                  placeholder="הדבק טוקן גישה מאובטח..." 
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 font-mono"
+                >
+                <span class="text-[11px] text-slate-500 mt-0.5 block">נוצר בפרופיל המשתמש ב-Home Assistant תחת Security</span>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label for="hass-entity" class="block text-xs font-bold text-slate-400 mb-1">ישות טלוויזיה (Switch / Media Player):</label>
-                <input type="text" id="hass-entity" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white">
+                <label for="hass-entity" class="block text-xs font-bold text-slate-400 mb-1">ישות טלוויזיה / שקע חכם (Entity ID):</label>
+                <input 
+                  type="text" 
+                  id="hass-entity" 
+                  placeholder="switch.tv_socket או media_player.tv" 
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white font-mono"
+                >
+                <span class="text-[11px] text-slate-500 mt-0.5 block">אם מוגדר, הישות תינעל עד לסיום המשימות</span>
               </div>
-              <div class="flex items-center gap-3 pt-5">
-                <input type="checkbox" id="hass-autoblock" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-indigo-600 focus:ring-indigo-500">
-                <label for="hass-autoblock" class="text-sm font-bold text-white">חסימת טלוויזיה אוטומטית (Active TV Block)</label>
+
+              <div>
+                <label for="hass-target-scope" class="block text-xs font-bold text-slate-400 mb-1">תנאי שחרור טלוויזיה (Target Scope):</label>
+                <select id="hass-target-scope" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white">
+                  <option value="all">כל הילדים סיימו את כל המשימות (ברירת מחדל)</option>
+                  <option value="any">לפחות ילד אחד סיים את כל משימותיו</option>
+                </select>
+                <span class="text-[11px] text-slate-500 mt-0.5 block">קביעת הקריטריון להדלקת הטלוויזיה</span>
+              </div>
+
+              <div>
+                <label for="hass-poll-interval" class="block text-xs font-bold text-slate-400 mb-1">תדירות סנכרון / בדיקה (שניות):</label>
+                <input 
+                  type="number" 
+                  id="hass-poll-interval" 
+                  min="5" 
+                  max="300" 
+                  value="30" 
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white font-mono"
+                >
+                <span class="text-[11px] text-slate-500 mt-0.5 block">ברירת מחדל: 30 שניות</span>
               </div>
             </div>
 
-            <div class="pt-3">
-              <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition">
-                שמור הגדרות
-              </button>
+            <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800">
+              <label class="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="hass-autoblock" class="w-5 h-5 rounded bg-slate-800 border-slate-700 text-rose-600 focus:ring-rose-500 cursor-pointer">
+                <div>
+                  <span class="text-sm font-bold text-white block">חסימת טלוויזיה אוטומטית (Active TV Block)</span>
+                  <span class="text-xs text-slate-400">כיבוי יזום של שקע/מסך הטלוויזיה במידה והודלק לפני סיום המשימות</span>
+                </div>
+              </label>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="submit" class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition flex items-center gap-2">
+                  <span>💾</span>
+                  <span>שמור הגדרות</span>
+                </button>
+                <button 
+                  type="button" 
+                  onclick="window.handleTestHass()" 
+                  id="btn-test-hass" 
+                  class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5 shadow"
+                >
+                  <span>📡</span>
+                  <span>בדוק חיבור ל-Home Assistant</span>
+                </button>
+                <button 
+                  type="button" 
+                  onclick="window.handleSyncHassEntities()" 
+                  id="btn-sync-entities" 
+                  class="px-4 py-2.5 bg-emerald-800/60 hover:bg-emerald-700 text-emerald-200 font-bold text-xs rounded-xl border border-emerald-700/60 transition flex items-center gap-1.5 shadow"
+                  title="יוצר ומעדכן ישויות וירטואליות ישירות ב-Home Assistant"
+                >
+                  <span>🔄</span>
+                  <span>סנכרן ישויות עכשיו</span>
+                </button>
+              </div>
             </div>
           </form>
+
+          <!-- Result feedback container for testing / syncing -->
+          <div id="hass-test-result" class="hidden p-4 rounded-xl border text-sm font-medium transition"></div>
+        </div>
+
+        <!-- Card 2: Lovelace Dashboard Card (Interactive Preview & YAML Generator) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+          <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div>
+              <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <span>🎴</span>
+                <span>כרטיס לוח בקרה ל-Home Assistant (Lovelace Card)</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">כרטיס מעוצב המרכז את כל ישויות המשימות, אישור הטלוויזיה והילדים בתצוגה אחת</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button 
+                onclick="window.handleAddLovelaceCard()" 
+                id="btn-add-lovelace-card" 
+                class="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5"
+              >
+                <span>➕</span>
+                <span>הוסף כרטיס ל-Home Assistant בלחיצה</span>
+              </button>
+              <button 
+                onclick="window.handleCopyCardYaml()" 
+                id="btn-copy-card-yaml" 
+                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5 shadow"
+              >
+                <span>📋</span>
+                <span>העתק קוד כרטיס (YAML)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Card Action Feedback -->
+          <div id="hass-card-feedback" class="hidden p-3.5 rounded-xl border text-sm font-medium"></div>
+
+          <!-- Visual Preview & YAML Code -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Live Visual Preview of Card -->
+            <div class="space-y-2">
+              <div class="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                <span>👁️</span>
+                <span>תצוגה מקדימה של הכרטיס ב-Home Assistant:</span>
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-inner">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                  <div class="font-bold text-sm text-white flex items-center gap-2">
+                    <span>📋</span>
+                    <span id="preview-card-family-title">לוח משימות לילדים (Kids Tasker)</span>
+                  </div>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-950 text-indigo-300 border border-indigo-800/60">Lovelace</span>
+                </div>
+
+                <!-- Entities Preview Rows -->
+                <div class="space-y-2 text-xs">
+                  <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+                    <div class="flex items-center gap-2 text-slate-300">
+                      <span>📺</span>
+                      <span class="font-medium">אישור צפייה בטלוויזיה</span>
+                    </div>
+                    <span id="preview-tv-allow" class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-slate-800 text-slate-300">טוען...</span>
+                  </div>
+
+                  <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+                    <div class="flex items-center gap-2 text-slate-300">
+                      <span>🔘</span>
+                      <span class="font-medium">מתג אישור טלוויזיה</span>
+                    </div>
+                    <span id="preview-tv-toggle" class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-slate-800 text-slate-300">טוען...</span>
+                  </div>
+
+                  <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+                    <div class="flex items-center gap-2 text-slate-300">
+                      <span>🔓</span>
+                      <span class="font-medium">מעקף הורים (פתיחת טלוויזיה)</span>
+                    </div>
+                    <span id="preview-parent-bypass" class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-slate-800 text-slate-300">off</span>
+                  </div>
+
+                  <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+                    <div class="flex items-center gap-2 text-slate-300">
+                      <span>✔️</span>
+                      <span class="font-medium">כל המשימות הושלמו</span>
+                    </div>
+                    <span id="preview-all-done" class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-slate-800 text-slate-300">טוען...</span>
+                  </div>
+
+                  <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+                    <div class="flex items-center gap-2 text-slate-300">
+                      <span>📝</span>
+                      <span class="font-medium">משימות שנותרו לביצוע</span>
+                    </div>
+                    <span id="preview-remaining" class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-slate-800 text-slate-300">-</span>
+                  </div>
+
+                  <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+                    <div class="flex items-center gap-2 text-slate-300">
+                      <span>📊</span>
+                      <span class="font-medium">אחוז ביצוע כולל</span>
+                    </div>
+                    <span id="preview-percentage" class="px-2 py-0.5 rounded font-mono font-bold text-[11px] bg-slate-800 text-slate-300">-</span>
+                  </div>
+
+                  <div class="pt-2 border-t border-slate-800 text-[11px] font-bold text-indigo-400">
+                    👦 פירוט לפי ילדים
+                  </div>
+                  <div id="preview-children-entities" class="space-y-1.5">
+                    <!-- Injected dynamically -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- YAML Code Display -->
+            <div class="space-y-2">
+              <div class="text-xs font-bold text-slate-400 flex items-center justify-between">
+                <span class="flex items-center gap-1.5">
+                  <span>📄</span>
+                  <span>קוד ה-YAML של הכרטיס (מותאם למשפחתך):</span>
+                </span>
+                <span class="text-[10px] text-slate-500">מתעדכן דינמית</span>
+              </div>
+              <pre id="card-yaml-code" class="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs font-mono text-indigo-300 overflow-x-auto h-72 leading-relaxed dir-ltr text-left">טוען קוד YAML...</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Ready-to-Use Home Assistant YAML Automation -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <span>📋</span>
+                <span>אוטומציית Home Assistant לחסימת טלוויזיה (YAML)</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">משתמש בישות שנוצרת ב-Home Assistant: <code class="text-emerald-400 font-mono">binary_sensor.kids_tasks_allow_tv</code></p>
+            </div>
+            <button 
+              onclick="window.handleCopyHassAutomationYaml()" 
+              class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5 shadow"
+            >
+              <span>📋</span>
+              <span>העתק קוד אוטומציה</span>
+            </button>
+          </div>
+
+          <pre id="hass-yaml-code" class="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs font-mono text-indigo-300 overflow-x-auto leading-relaxed dir-ltr text-left">טוען קוד אוטומציה...</pre>
+        </div>
+
+        <!-- Card 4: Cloud Webhook & REST Command Integration -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+            <div>
+              <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                <span>⚡</span>
+                <span>אינטגרציית Webhook בענן (Cloud Webhook / REST Command)</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">
+                שליטה ישירה במעקף ההורים מתוך כפתורים, אוטומציות או סקריפטים ב-Home Assistant ללא צורך בחיבור נכנס
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button 
+                onclick="window.handleTestWebhook()" 
+                id="btn-test-webhook"
+                class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5"
+              >
+                <span>🧪</span>
+                <span>שלח Webhook בדיקה</span>
+              </button>
+              <button 
+                onclick="window.handleCopyWebhookConfig()" 
+                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5 shadow"
+              >
+                <span>📋</span>
+                <span>העתק הגדרת rest_command</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-1">
+              <span class="text-slate-400 font-bold block">כתובת ה-Webhook בענן (POST):</span>
+              <code id="webhook-url-display" class="font-mono text-indigo-400 font-bold text-xs break-all">https://us-central1-kids-tasker-c0ef6.cloudfunctions.net/hassBypassWebhook</code>
+            </div>
+
+            <div>
+              <span class="text-slate-400 font-bold block mb-1">הדבק קוד זה בקובץ <code class="text-indigo-400">configuration.yaml</code> ב-Home Assistant:</span>
+              <pre id="webhook-yaml-code" class="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs font-mono text-indigo-300 overflow-x-auto leading-relaxed dir-ltr text-left">טוען הגדרת Webhook...</pre>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -778,6 +1040,6 @@
   <div id="toast" class="hidden"></div>
 
   <!-- Modular Script (Cache-busted) -->
-  <script type="module" src="/js/parent.js?v=2.2.0"></script>
+  <script type="module" src="/js/parent.js?v=2.3.0"></script>
 </body>
 </html>
