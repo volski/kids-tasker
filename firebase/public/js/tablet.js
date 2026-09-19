@@ -13,16 +13,21 @@ import {
   subscribeToUserProfile,
   requestJoinFamily,
   cancelJoinRequest,
-  claimFamilyIfUnowned
+  claimFamilyIfUnowned,
+  registerTabletRequest
 } from './db.js';
 
 // DOM Elements
 const authLanding = document.getElementById('auth-landing');
 const viewPendingApproval = document.getElementById('view-pending-approval');
+const viewTabletPending = document.getElementById('view-tablet-pending');
+const viewTabletDisconnected = document.getElementById('view-tablet-disconnected');
 const viewNoFamily = document.getElementById('view-no-family');
 const loadingElem = document.getElementById('loading-spinner');
 const boardElem = document.getElementById('board');
 const pendingFamilyCodeDisplay = document.getElementById('pending-family-code-display');
+const tabletFamilyDisplay = document.getElementById('tablet-family-display');
+const tabletDeviceIdDisplay = document.getElementById('tablet-device-id-display');
 
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
@@ -41,6 +46,22 @@ let currentUser = null;
 let familyUnsubscribe = null;
 let userProfileUnsubscribe = null;
 const pendingToggles = new Set();
+let wasApprovedTablet = false;
+
+// Device Identification for Tablet Mode
+export function getOrCreateDeviceId() {
+  let deviceId = localStorage.getItem('kids_tasker_device_id');
+  if (!deviceId) {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let rand = '';
+    for (let i = 0; i < 8; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    deviceId = `tab_${rand}`;
+    localStorage.setItem('kids_tasker_device_id', deviceId);
+  }
+  return deviceId;
+}
 
 // Color themes for children cards
 const childColors = [
@@ -131,6 +152,8 @@ export function showToast(msg, isError = false) {
 function showView(viewName) {
   if (authLanding) authLanding.classList.add('hidden');
   if (viewPendingApproval) viewPendingApproval.classList.add('hidden');
+  if (viewTabletPending) viewTabletPending.classList.add('hidden');
+  if (viewTabletDisconnected) viewTabletDisconnected.classList.add('hidden');
   if (viewNoFamily) viewNoFamily.classList.add('hidden');
   if (loadingElem) loadingElem.classList.add('hidden');
   if (boardElem) boardElem.classList.add('hidden');
@@ -139,6 +162,10 @@ function showView(viewName) {
     if (authLanding) authLanding.classList.remove('hidden');
   } else if (viewName === 'pending') {
     if (viewPendingApproval) viewPendingApproval.classList.remove('hidden');
+  } else if (viewName === 'tablet-pending') {
+    if (viewTabletPending) viewTabletPending.classList.remove('hidden');
+  } else if (viewName === 'tablet-disconnected') {
+    if (viewTabletDisconnected) viewTabletDisconnected.classList.remove('hidden');
   } else if (viewName === 'no-family') {
     if (viewNoFamily) viewNoFamily.classList.remove('hidden');
   } else if (viewName === 'loading') {
@@ -395,6 +422,11 @@ function loadFamilyBoard(familyId, tokenCandidate = null) {
 
   familyUnsubscribe = subscribeToFamily(familyId, async data => {
     const currentUid = currentUser ? currentUser.uid : null;
+    const deviceId = getOrCreateDeviceId();
+    const approvedTablets = data.tablets || [];
+    const pendingTablets = data.pendingTablets || [];
+    const isApprovedTablet = approvedTablets.some(t => t.id === deviceId);
+    const isPendingTablet = pendingTablets.some(t => t.id === deviceId);
 
     // 1. Check if token matches family's tabletToken (Bypasses Google Auth for kids view)
     const isValidTabletToken = Boolean(activeToken && data.tabletToken && (activeToken === data.tabletToken));
@@ -415,18 +447,68 @@ function loadFamilyBoard(familyId, tokenCandidate = null) {
       (data.members || []).some(m => m.uid === currentUid)
     ));
 
-    if (!isValidTabletToken && !isApprovedUser) {
-      console.warn(`[Security Gate] Tablet access blocked to family ${familyId}. Neither valid tablet token nor approved Google user.`);
-      const isPending = Boolean(currentUser && (data.pendingMembers || []).some(p => p.uid === currentUid));
-      if (isPending) {
-        if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = familyId;
-        showView('pending');
-        showToast('הגישה ללוח חסומה עד לאישור מנהל המשפחה 🔒', true);
-      } else {
-        showView('auth');
-        showToast('נדרש טוקן טאבלט תקין מקוד ה-QR או התחברות Google 🔒', true);
+    // If NOT an approved Google user, tablet device gatekeeper is strictly enforced:
+    if (!isApprovedUser) {
+      if (!isValidTabletToken) {
+        // Not a valid tablet token
+        if (wasApprovedTablet) {
+          // Token changed / invalidated
+          wasApprovedTablet = false;
+          localStorage.removeItem('kids_tasker_tablet_token');
+          showView('tablet-disconnected');
+          showToast('הטאבלט נותק על ידי מנהל המשפחה 🔒', true);
+          return;
+        }
+
+        console.warn(`[Security Gate] Tablet access blocked to family ${familyId}. Neither valid tablet token nor approved Google user.`);
+        const isPending = Boolean(currentUser && (data.pendingMembers || []).some(p => p.uid === currentUid));
+        if (isPending) {
+          if (pendingFamilyCodeDisplay) pendingFamilyCodeDisplay.innerText = familyId;
+          showView('pending');
+          showToast('הגישה ללוח חסומה עד לאישור מנהל המשפחה 🔒', true);
+        } else {
+          showView('auth');
+          showToast('נדרש טוקן טאבלט תקין מקוד ה-QR או התחברות Google 🔒', true);
+        }
+        return; // STOP! Never render children or chores
       }
-      return; // STOP! Never render children or chores
+
+      // Valid tablet token: Check if tablet device is in the approved tablets list!
+      if (!isApprovedTablet) {
+        // If the tablet WAS previously approved in this session, it was just removed by an admin!
+        if (wasApprovedTablet) {
+          console.warn(`[Security Gate] Tablet ${deviceId} was removed from approved tablets by admin! Disconnecting immediately.`);
+          wasApprovedTablet = false;
+          localStorage.removeItem('kids_tasker_tablet_token');
+          showView('tablet-disconnected');
+          showToast('הטאבלט נותק על ידי מנהל המשפחה 🔒', true);
+          return; // STOP! Disconnected!
+        }
+
+        // Tablet is not yet approved
+        console.warn(`[Security Gate] Tablet ${deviceId} is pending approval by family admin.`);
+        if (tabletFamilyDisplay) tabletFamilyDisplay.innerText = data.name || familyId;
+        if (tabletDeviceIdDisplay) tabletDeviceIdDisplay.innerText = deviceId;
+
+        // Auto-register to pendingTablets if not already pending
+        if (!isPendingTablet) {
+          try {
+            await registerTabletRequest(familyId, {
+              id: deviceId,
+              token: activeToken,
+              name: 'טאבלט חדש'
+            });
+          } catch (regErr) {
+            console.error('Failed to register tablet request:', regErr);
+          }
+        }
+
+        showView('tablet-pending');
+        return; // STOP! Never render chores until approved
+      }
+
+      // The tablet device is approved!
+      wasApprovedTablet = true;
     }
 
     // Access granted!
