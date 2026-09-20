@@ -1,4 +1,4 @@
-﻿const http = require('http');
+const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -102,9 +102,15 @@ const DEFAULT_TASKS_DATA = {
     resetTime: '06:00',
     bypassSchedule: {
       enabled: false,
-      days: [0, 1, 2, 3, 4, 5, 6],
-      startTime: '15:00',
-      endTime: '21:00'
+      schedule: {
+        0: { enabled: false, startTime: '15:00', endTime: '21:00' }, // Sunday
+        1: { enabled: true,  startTime: '15:00', endTime: '21:00' }, // Monday
+        2: { enabled: true,  startTime: '15:00', endTime: '21:00' }, // Tuesday
+        3: { enabled: true,  startTime: '15:00', endTime: '21:00' }, // Wednesday
+        4: { enabled: true,  startTime: '15:00', endTime: '21:00' }, // Thursday
+        5: { enabled: true,  startTime: '13:00', endTime: '22:00' }, // Friday
+        6: { enabled: false, startTime: '10:00', endTime: '22:00' }  // Saturday
+      }
     }
   }
 };
@@ -157,9 +163,32 @@ function normalizeTasksData(data) {
     } else {
       const bs = data.settings.bypassSchedule;
       if (typeof bs.enabled !== 'boolean') bs.enabled = false;
-      if (!Array.isArray(bs.days)) bs.days = [0,1,2,3,4,5,6];
-      if (typeof bs.startTime !== 'string') bs.startTime = '15:00';
-      if (typeof bs.endTime !== 'string') bs.endTime = '21:00';
+      // Migrate old flat format (days array + startTime/endTime) to per-day schedule
+      if (!bs.schedule || typeof bs.schedule !== 'object') {
+        const def = DEFAULT_TASKS_DATA.settings.bypassSchedule.schedule;
+        bs.schedule = {};
+        for (let d = 0; d <= 6; d++) {
+          const wasEnabled = Array.isArray(bs.days) ? bs.days.includes(d) : (def[d] || {}).enabled;
+          bs.schedule[d] = {
+            enabled: Boolean(wasEnabled),
+            startTime: typeof bs.startTime === 'string' ? bs.startTime : (def[d] || {}).startTime || '15:00',
+            endTime:   typeof bs.endTime   === 'string' ? bs.endTime   : (def[d] || {}).endTime   || '21:00'
+          };
+        }
+        delete bs.days; delete bs.startTime; delete bs.endTime;
+      } else {
+        // Ensure all 7 days exist in schedule
+        const def = DEFAULT_TASKS_DATA.settings.bypassSchedule.schedule;
+        for (let d = 0; d <= 6; d++) {
+          if (!bs.schedule[d] || typeof bs.schedule[d] !== 'object') {
+            bs.schedule[d] = { ...def[d] };
+          } else {
+            if (typeof bs.schedule[d].enabled !== 'boolean') bs.schedule[d].enabled = false;
+            if (typeof bs.schedule[d].startTime !== 'string') bs.schedule[d].startTime = '15:00';
+            if (typeof bs.schedule[d].endTime   !== 'string') bs.schedule[d].endTime   = '21:00';
+          }
+        }
+      }
     }
   }
 
@@ -1419,12 +1448,17 @@ app.post('/api/settings', (req, res) => {
       data.settings.resetTime = (typeof resetTime === 'string') ? resetTime.trim() : '';
     }
     if (bypassSchedule && typeof bypassSchedule === 'object') {
-      data.settings.bypassSchedule = {
-        enabled: Boolean(bypassSchedule.enabled),
-        days: Array.isArray(bypassSchedule.days) ? bypassSchedule.days.map(Number).filter(d => d >= 0 && d <= 6) : [0,1,2,3,4,5,6],
-        startTime: typeof bypassSchedule.startTime === 'string' ? bypassSchedule.startTime : '15:00',
-        endTime: typeof bypassSchedule.endTime === 'string' ? bypassSchedule.endTime : '21:00'
-      };
+      const newBs = { enabled: Boolean(bypassSchedule.enabled), schedule: {} };
+      const defSched = DEFAULT_TASKS_DATA.settings.bypassSchedule.schedule;
+      for (let d = 0; d <= 6; d++) {
+        const dayIn = bypassSchedule.schedule && bypassSchedule.schedule[d];
+        newBs.schedule[d] = {
+          enabled:   dayIn ? Boolean(dayIn.enabled)   : (defSched[d] || {}).enabled || false,
+          startTime: dayIn && typeof dayIn.startTime === 'string' ? dayIn.startTime : (defSched[d] || {}).startTime || '15:00',
+          endTime:   dayIn && typeof dayIn.endTime   === 'string' ? dayIn.endTime   : (defSched[d] || {}).endTime   || '21:00'
+        };
+      }
+      data.settings.bypassSchedule = newBs;
     }
     writeTasks(data);
     res.json({ success: true, settings: data.settings });
@@ -2912,7 +2946,7 @@ mode: single
           <span class="text-2xl">📺</span>
           <div>
             <h3 class="text-xl font-black text-white">לוח זמנים לפתיחת טלוויזיה</h3>
-            <p class="text-xs text-slate-400 mt-0.5">הגדר מתי הביפאס מופעל אוטומטית — הילדים יוכלו לצפות בטלוויזיה בלי לבצע משימות</p>
+            <p class="text-xs text-slate-400 mt-0.5">הגדר לכל יום בנפרד מתי הביפאס פעיל — הילדים יוכלו לצפות בטלוויזיה ללא ביצוע משימות</p>
           </div>
         </div>
 
@@ -2921,47 +2955,62 @@ mode: single
           <span class="text-base font-bold text-slate-200">הפעל לוח זמנים לביפאס</span>
         </label>
 
-        <div id="settings-bypass-details" class="space-y-4 pt-1">
-          <div>
-            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">ימים פעילים</span>
-            <div class="flex flex-wrap gap-2" id="settings-bypass-days">
-              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
-                <input type="checkbox" value="0" class="accent-purple-500"> א׳
-              </label>
-              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
-                <input type="checkbox" value="1" class="accent-purple-500"> ב׳
-              </label>
-              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
-                <input type="checkbox" value="2" class="accent-purple-500"> ג׳
-              </label>
-              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
-                <input type="checkbox" value="3" class="accent-purple-500"> ד׳
-              </label>
-              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
-                <input type="checkbox" value="4" class="accent-purple-500"> ה׳
-              </label>
-              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
-                <input type="checkbox" value="5" class="accent-purple-500"> ו׳
-              </label>
-              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
-                <input type="checkbox" value="6" class="accent-purple-500"> ש׳
-              </label>
-            </div>
-          </div>
-
-          <div class="flex flex-wrap gap-5">
-            <label class="flex flex-col gap-1.5">
-              <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">שעת התחלה</span>
-              <input type="time" id="settings-bypass-start"
-                class="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-            </label>
-            <label class="flex flex-col gap-1.5">
-              <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">שעת סיום</span>
-              <input type="time" id="settings-bypass-end"
-                class="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-            </label>
+        <div id="settings-bypass-details">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <th class="text-right pb-2 pr-2">יום</th>
+                  <th class="pb-2 px-2">פעיל</th>
+                  <th class="pb-2 px-2">משעה</th>
+                  <th class="pb-2 px-2">עד שעה</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800" id="settings-bypass-days-table">
+                <tr data-day="0">
+                  <td class="py-2 pr-2 font-semibold text-slate-300 whitespace-nowrap">ראשון</td>
+                  <td class="py-2 px-2 text-center"><input type="checkbox" class="day-enabled w-4 h-4 accent-purple-500" data-day="0"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-start w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="0" value="15:00"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-end w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="0" value="21:00"></td>
+                </tr>
+                <tr data-day="1">
+                  <td class="py-2 pr-2 font-semibold text-slate-300 whitespace-nowrap">שני</td>
+                  <td class="py-2 px-2 text-center"><input type="checkbox" class="day-enabled w-4 h-4 accent-purple-500" data-day="1"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-start w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="1" value="15:00"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-end w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="1" value="21:00"></td>
+                </tr>
+                <tr data-day="2">
+                  <td class="py-2 pr-2 font-semibold text-slate-300 whitespace-nowrap">שלישי</td>
+                  <td class="py-2 px-2 text-center"><input type="checkbox" class="day-enabled w-4 h-4 accent-purple-500" data-day="2"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-start w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="2" value="15:00"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-end w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="2" value="21:00"></td>
+                </tr>
+                <tr data-day="3">
+                  <td class="py-2 pr-2 font-semibold text-slate-300 whitespace-nowrap">רביעי</td>
+                  <td class="py-2 px-2 text-center"><input type="checkbox" class="day-enabled w-4 h-4 accent-purple-500" data-day="3"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-start w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="3" value="15:00"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-end w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="3" value="21:00"></td>
+                </tr>
+                <tr data-day="4">
+                  <td class="py-2 pr-2 font-semibold text-slate-300 whitespace-nowrap">חמישי</td>
+                  <td class="py-2 px-2 text-center"><input type="checkbox" class="day-enabled w-4 h-4 accent-purple-500" data-day="4"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-start w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="4" value="15:00"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-end w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="4" value="21:00"></td>
+                </tr>
+                <tr data-day="5">
+                  <td class="py-2 pr-2 font-semibold text-slate-300 whitespace-nowrap">שישי</td>
+                  <td class="py-2 px-2 text-center"><input type="checkbox" class="day-enabled w-4 h-4 accent-purple-500" data-day="5"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-start w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="5" value="13:00"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-end w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="5" value="22:00"></td>
+                </tr>
+                <tr data-day="6">
+                  <td class="py-2 pr-2 font-semibold text-slate-300 whitespace-nowrap">שבת</td>
+                  <td class="py-2 px-2 text-center"><input type="checkbox" class="day-enabled w-4 h-4 accent-purple-500" data-day="6"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-start w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="6" value="10:00"></td>
+                  <td class="py-2 px-2"><input type="time" class="day-end w-28 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-purple-500" data-day="6" value="22:00"></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -4105,23 +4154,36 @@ mode: single
       const bypassEnabledEl = document.getElementById('settings-bypass-enabled');
       if (bypassEnabledEl) bypassEnabledEl.checked = Boolean(bs.enabled);
       toggleBypassDetails(Boolean(bs.enabled));
-      // Days
-      document.querySelectorAll('#settings-bypass-days input[type=checkbox]').forEach(cb => {
-        cb.checked = Array.isArray(bs.days) && bs.days.includes(parseInt(cb.value));
+      // Per-day table
+      const schedule = bs.schedule || {};
+      document.querySelectorAll('#settings-bypass-days-table .day-enabled').forEach(cb => {
+        const d = parseInt(cb.dataset.day);
+        const cfg = schedule[d] || {};
+        cb.checked = Boolean(cfg.enabled);
       });
-      const startEl = document.getElementById('settings-bypass-start');
-      const endEl = document.getElementById('settings-bypass-end');
-      if (startEl) startEl.value = bs.startTime || '15:00';
-      if (endEl) endEl.value = bs.endTime || '21:00';
-      // Status
+      document.querySelectorAll('#settings-bypass-days-table .day-start').forEach(inp => {
+        const d = parseInt(inp.dataset.day);
+        const cfg = schedule[d] || {};
+        inp.value = cfg.startTime || '15:00';
+      });
+      document.querySelectorAll('#settings-bypass-days-table .day-end').forEach(inp => {
+        const d = parseInt(inp.dataset.day);
+        const cfg = schedule[d] || {};
+        inp.value = cfg.endTime || '21:00';
+      });
+      // Status line
       const bypassStatus = document.getElementById('settings-bypass-status');
       if (bypassStatus) {
         if (!bs.enabled) {
           bypassStatus.textContent = 'לוח הזמנים כבוי';
         } else {
           const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
-          const dayLabels = (bs.days || []).map(d => dayNames[d]).join(', ');
-          bypassStatus.textContent = \`פעיל בימים: \${dayLabels} • \${bs.startTime || ''}–\${bs.endTime || ''}\`;
+          const activeDays = Object.entries(schedule)
+            .filter(([,cfg]) => cfg.enabled)
+            .map(([d, cfg]) => \`\${dayNames[d]} \${cfg.startTime}–\${cfg.endTime}\`);
+          bypassStatus.textContent = activeDays.length
+            ? \`פעיל: \${activeDays.join(' | ')}\`
+            : 'לא נבחרו ימים פעילים';
         }
       }
     }
@@ -4159,14 +4221,19 @@ mode: single
 
     async function saveBypassSchedule() {
       const enabled = document.getElementById('settings-bypass-enabled')?.checked || false;
-      const days = Array.from(document.querySelectorAll('#settings-bypass-days input[type=checkbox]:checked')).map(cb => parseInt(cb.value));
-      const startTime = document.getElementById('settings-bypass-start')?.value || '15:00';
-      const endTime = document.getElementById('settings-bypass-end')?.value || '21:00';
+      const schedule = {};
+      document.querySelectorAll('#settings-bypass-days-table tr[data-day]').forEach(row => {
+        const d = parseInt(row.dataset.day);
+        const dayEnabled = row.querySelector('.day-enabled')?.checked || false;
+        const startTime = row.querySelector('.day-start')?.value || '15:00';
+        const endTime   = row.querySelector('.day-end')?.value   || '21:00';
+        schedule[d] = { enabled: dayEnabled, startTime, endTime };
+      });
       try {
         const res = await fetch('/api/settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bypassSchedule: { enabled, days, startTime, endTime } })
+          body: JSON.stringify({ bypassSchedule: { enabled, schedule } })
         });
         if (!res.ok) throw new Error('save failed');
         const d = await res.json();
@@ -4345,21 +4412,20 @@ function start() {
 
       // --- Bypass schedule ---
       const bs = settings.bypassSchedule;
-      if (bs && bs.enabled) {
-        const inDay = Array.isArray(bs.days) && bs.days.includes(dayOfWeek);
-        let inTime = false;
-        if (bs.startTime && bs.endTime) {
-          if (bs.endTime > bs.startTime) {
-            inTime = timeNow >= bs.startTime && timeNow < bs.endTime;
+      if (bs && bs.enabled && bs.schedule) {
+        const dayConfig = bs.schedule[dayOfWeek];
+        let shouldBypass = false;
+        if (dayConfig && dayConfig.enabled && dayConfig.startTime && dayConfig.endTime) {
+          if (dayConfig.endTime > dayConfig.startTime) {
+            shouldBypass = timeNow >= dayConfig.startTime && timeNow < dayConfig.endTime;
           } else {
-            // Overnight window (e.g. 22:00 - 06:00)
-            inTime = timeNow >= bs.startTime || timeNow < bs.endTime;
+            // Overnight window (e.g. 22:00–06:00)
+            shouldBypass = timeNow >= dayConfig.startTime || timeNow < dayConfig.endTime;
           }
         }
-        const shouldBypass = inDay && inTime;
         if (shouldBypass !== lastScheduledBypassState) {
           lastScheduledBypassState = shouldBypass;
-          console.log(`[Scheduler] Bypass schedule: ${shouldBypass ? 'ACTIVATING' : 'DEACTIVATING'} bypass`);
+          console.log(`[Scheduler] Bypass schedule: ${shouldBypass ? 'ACTIVATING' : 'DEACTIVATING'} bypass (day ${dayOfWeek}, ${timeNow})`);
           data.homeAssistant.parentBypass = shouldBypass;
           writeTasks(data);
           io.emit('task_updated', data);
