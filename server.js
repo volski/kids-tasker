@@ -1631,10 +1631,10 @@ app.get('/', (req, res) => {
           <span>ניהול הורים</span>
         </button>
 
-        <div id="status-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">
+        <button id="status-badge" onclick="reconnectSocket()" title="לחץ לחיבור מחדש" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 cursor-pointer hover:bg-slate-700 transition">
           <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
           <span id="status-text" class="hidden sm:inline">מתחבר...</span>
-        </div>
+        </button>
       </div>
     </div>
   </header>
@@ -1982,6 +1982,13 @@ app.get('/', (req, res) => {
       renderBoard(updatedData);
     });
 
+    function reconnectSocket() {
+      fetchTasks();
+      if (!socket.connected) {
+        socket.connect();
+      }
+    }
+
     fetchTasks();
 
     // ==========================================
@@ -2279,10 +2286,10 @@ app.get('/parent', (req, res) => {
           <span class="hidden sm:inline">נעל</span>
         </button>
 
-        <div id="status-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">
+        <button id="status-badge" onclick="reconnectSocket()" title="לחץ לחיבור מחדש" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 cursor-pointer hover:bg-slate-700 transition">
           <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
           <span id="status-text" class="hidden sm:inline">מתחבר...</span>
-        </div>
+        </button>
       </div>
     </div>
   </header>
@@ -2838,6 +2845,13 @@ mode: single
         loadCardYamlAndPreview();
       }
     });
+
+    function reconnectSocket() {
+      loadData();
+      if (!socket.connected) {
+        socket.connect();
+      }
+    }
 
     async function loadIcons() {
       try {
