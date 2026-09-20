@@ -4448,7 +4448,7 @@ function start() {
   startHassEventListener();
 
   // ---- Settings-based scheduler: auto-reset + bypass schedule ----
-  let lastAutoResetDate = null;
+  let lastAutoResetMarker = null;
   let lastScheduledBypassState = null;
 
   function runScheduler() {
@@ -4464,9 +4464,11 @@ function start() {
 
       // --- Auto-reset tasks ---
       const resetTime = (settings.resetTime || '').trim();
-      if (resetTime && timeNow === resetTime && lastAutoResetDate !== todayStr) {
+      const currentResetMarker = `${todayStr}-${timeNow}`;
+      
+      if (resetTime && timeNow === resetTime && lastAutoResetMarker !== currentResetMarker) {
         console.log(`[Scheduler] Auto-resetting tasks at ${resetTime}`);
-        lastAutoResetDate = todayStr;
+        lastAutoResetMarker = currentResetMarker;
         performResetDay();
       }
 
