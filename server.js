@@ -4502,7 +4502,8 @@ function start() {
 
   server.listen(PORT, () => {
     console.log(`====================================================`);
-    console.log(` kids-tasker server is running!`);
+    console.log(` Kids Tasker Server is running on port ${PORT}`);
+    console.log(` Server Local Time: ${new Date().toString()}`);
     console.log(` Kids Board URL:    http://localhost:${PORT}`);
     console.log(` Parents Dash URL:  http://localhost:${PORT}/parent`);
     console.log(` HASS Status API:   http://localhost:${PORT}/api/hass/status`);
