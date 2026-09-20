@@ -1570,6 +1570,39 @@ app.delete('/api/children/:id/tasks/:taskId', (req, res) => {
   }
 });
 
+// Reorder tasks for a child
+app.post('/api/children/:id/tasks/reorder', (req, res) => {
+  const { id } = req.params;
+  const { taskIds } = req.body;
+
+  if (!Array.isArray(taskIds)) {
+    return res.status(400).json({ error: 'taskIds must be an array' });
+  }
+
+  try {
+    const data = readTasks();
+    const child = data.children.find(c => c.id === id);
+    if (!child) {
+      return res.status(404).json({ error: `Child with id ${id} not found` });
+    }
+
+    // Rebuild tasks in the order specified, ignoring unknown IDs
+    const taskMap = Object.fromEntries(child.tasks.map(t => [t.id, t]));
+    const reordered = taskIds.map(tid => taskMap[tid]).filter(Boolean);
+    // Append any tasks not included in taskIds (safety)
+    child.tasks.forEach(t => { if (!taskIds.includes(t.id)) reordered.push(t); });
+    child.tasks = reordered;
+
+    writeTasks(data);
+    io.emit('task_updated', data);
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Failed to reorder tasks:', error);
+    res.status(500).json({ error: 'Failed to reorder tasks' });
+  }
+});
+
 // Root Route - serves the Kids Task Board SPA
 app.get('/', (req, res) => {
   res.send(`<!DOCTYPE html>
@@ -1866,12 +1899,12 @@ app.get('/', (req, res) => {
                   >
                     <div class="flex items-center gap-3.5 min-w-0">
                       <div class="w-12 h-12 rounded-2xl bg-black/25 p-1.5 flex items-center justify-center flex-shrink-0 border border-white/10 shadow-sm">
-                        <img 
+                        \${taskIcon === 'none' ? '' : \`<img 
                           src="/icons/\${taskIcon}.svg" 
                           alt="\${task.title}" 
                           class="w-full h-full object-contain filter drop-shadow"
-                          onerror="this.onerror=null; this.src='/icons/star.svg';"
-                        >
+                          onerror="this.onerror=null; this.remove();"
+                        >\`}
                       </div>
                       <div class="flex flex-col min-w-0">
                         <span class="text-lg sm:text-xl font-bold tracking-tight truncate leading-tight \${isCompleted ? 'line-through decoration-white/60 text-white/90' : 'text-white'}">
@@ -3095,7 +3128,7 @@ mode: single
         return;
       }
 
-      const iconOptionsHtml = availableIcons.map(ic => \`
+      const iconOptionsHtml = '<option value="none">⬜ ללא אייקון</option>' + availableIcons.map(ic => \`
         <option value="\${ic.id}">\${ic.emoji} \${ic.name}</option>
       \`).join('');
 
@@ -3157,53 +3190,73 @@ mode: single
             </form>
 
             <div class="space-y-2.5">
-              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">רשימת משימות</h4>
-              \${child.tasks.length === 0 ? '<p class="text-sm text-slate-500 py-2">אין משימות עדיין</p>' : child.tasks.map(task => {
-                const currentIcon = task.icon || 'star';
-                const taskIconOptions = availableIcons.map(ic => \`
-                  <option value="\${ic.id}" \${ic.id === currentIcon ? 'selected' : ''}>\${ic.emoji} \${ic.name}</option>
-                \`).join('');
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">רשימת משימות <span class="text-slate-600 font-normal normal-case">(גרור לשינוי סדר)</span></h4>
+              <div
+                class="task-sortable-list space-y-2"
+                data-child-id="\${child.id}"
+                ondragover="event.preventDefault()"
+                ondrop="handleTaskDrop(event, '\${child.id}')"
+              >
+                \${child.tasks.length === 0 ? '<p class="text-sm text-slate-500 py-2">אין משימות עדיין</p>' : child.tasks.map(task => {
+                  const currentIcon = task.icon || 'star';
+                  const isNone = currentIcon === 'none';
+                  const taskIconOptions = '<option value="none"' + (isNone ? ' selected' : '') + '>⬜ ללא אייקון</option>' +
+                    availableIcons.map(ic => \`<option value="\${ic.id}" \${ic.id === currentIcon ? 'selected' : ''}>\${ic.emoji} \${ic.name}</option>\`).join('');
+                  const iconPreviewHtml = isNone
+                    ? \`<div id="task-preview-\${child.id}-\${task.id}" class="w-full h-full"></div>\`
+                    : \`<img src="/icons/\${currentIcon}.svg" id="task-preview-\${child.id}-\${task.id}" alt="" class="w-full h-full object-contain" onerror="this.parentElement.innerHTML='';"></img>\`;
 
-                return \`
-                  <div class="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 p-3 bg-slate-950/60 border border-slate-800/90 rounded-2xl">
-                    <div class="flex items-center gap-3 flex-1 min-w-[220px]">
-                      <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center flex-shrink-0">
-                        <img src="/icons/\${currentIcon}.svg" id="task-preview-\${child.id}-\${task.id}" alt="" class="w-full h-full object-contain" onerror="this.src='/icons/star.svg'">
+                  return \`
+                    <div
+                      class="task-drag-row flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 p-3 bg-slate-950/60 border border-slate-800/90 rounded-2xl cursor-grab active:cursor-grabbing transition-colors"
+                      draggable="true"
+                      data-task-id="\${task.id}"
+                      data-child-id="\${child.id}"
+                      ondragstart="handleTaskDragStart(event, '\${child.id}', '\${task.id}')"
+                      ondragend="handleTaskDragEnd(event)"
+                      ondragover="event.preventDefault(); handleTaskDragOver(event)"
+                    >
+                      <span class="text-slate-600 hover:text-slate-400 select-none flex-shrink-0 cursor-grab text-lg leading-none" title="גרור לשינוי סדר">⠿</span>
+
+                      <div class="flex items-center gap-3 flex-1 min-w-[200px]">
+                        <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          \${iconPreviewHtml}
+                        </div>
+
+                        <select
+                          id="task-icon-\${child.id}-\${task.id}"
+                          onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
+                          class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          title="שנה אייקון"
+                        >
+                          \${taskIconOptions}
+                        </select>
+
+                        <input
+                          type="text"
+                          id="task-title-\${child.id}-\${task.id}"
+                          value="\${task.title}"
+                          onblur="handleUpdateTask('\${child.id}', '\${task.id}', true)"
+                          onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleUpdateTask('\${child.id}', '\${task.id}'); }"
+                          class="bg-transparent border-b border-slate-700 focus:border-indigo-500 text-white font-bold text-sm px-2 py-1 flex-1 focus:bg-slate-900 rounded focus:outline-none transition"
+                          title="לחץ Enter או לחץ מחוץ לתיבה לשמירה אוטומטית לקובץ"
+                        >
                       </div>
 
-                      <select 
-                        id="task-icon-\${child.id}-\${task.id}" 
-                        onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
-                        class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        title="שנה אייקון"
-                      >
-                        \${taskIconOptions}
-                      </select>
-
-                      <input 
-                        type="text" 
-                        id="task-title-\${child.id}-\${task.id}" 
-                        value="\${task.title}" 
-                        onblur="handleUpdateTask('\${child.id}', '\${task.id}', true)"
-                        onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleUpdateTask('\${child.id}', '\${task.id}'); }"
-                        class="bg-transparent border-b border-slate-700 focus:border-indigo-500 text-white font-bold text-sm px-2 py-1 flex-1 focus:bg-slate-900 rounded focus:outline-none transition"
-                        title="לחץ Enter או לחץ מחוץ לתיבה לשמירה אוטומטית לקובץ"
-                      >
+                      <div class="flex items-center gap-2">
+                        <button onclick="handleUpdateTask('\${child.id}', '\${task.id}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1" title="שמור שינוי כותרת ואייקון לקובץ">
+                          <span>שמור</span>
+                          <span>💾</span>
+                        </button>
+                        <span id="feedback-task-\${child.id}-\${task.id}" class="text-xs font-bold text-emerald-400 hidden">✓ נשמר!</span>
+                        <button onclick="handleDeleteTask('\${child.id}', '\${task.id}', '\${task.title}')" class="p-2 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-bold transition" title="מחק משימה">
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-
-                    <div class="flex items-center gap-2">
-                      <button onclick="handleUpdateTask('\${child.id}', '\${task.id}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1" title="שמור שינוי כותרת ואייקון לקובץ">
-                        <span>שמור</span>
-                        <span>💾</span>
-                      </button>
-                      <span id="feedback-task-\${child.id}-\${task.id}" class="text-xs font-bold text-emerald-400 hidden">✓ נשמר!</span>
-                      <button onclick="handleDeleteTask('\${child.id}', '\${task.id}', '\${task.title}')" class="p-2 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-bold transition" title="מחק משימה">
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                \`;
-              }).join('')}
+                  \`;
+                }).join('')}
+              </div>
             </div>
           </div>
         \`;
@@ -3719,14 +3772,36 @@ mode: single
     async function handleUpdateTask(childId, taskId, silent = false) {
       const titleInput = document.getElementById(\`task-title-\${childId}-\${taskId}\`);
       const iconSelect = document.getElementById(\`task-icon-\${childId}-\${taskId}\`);
-      const preview = document.getElementById(\`task-preview-\${childId}-\${taskId}\`);
+      const previewEl = document.getElementById(\`task-preview-\${childId}-\${taskId}\`);
       if (!titleInput) return;
       const title = titleInput.value.trim();
       const icon = iconSelect ? iconSelect.value : undefined;
       if (!title) return;
 
-      if (icon && preview) {
-        preview.src = \`/icons/\${icon}.svg\`;
+      // Update icon preview live
+      if (previewEl) {
+        if (!icon || icon === 'none') {
+          if (previewEl.tagName === 'IMG') {
+            const div = document.createElement('div');
+            div.id = previewEl.id;
+            div.className = 'w-full h-full';
+            previewEl.replaceWith(div);
+          } else {
+            previewEl.innerHTML = '';
+          }
+        } else {
+          if (previewEl.tagName === 'IMG') {
+            previewEl.src = \`/icons/\${icon}.svg\`;
+          } else {
+            const img = document.createElement('img');
+            img.id = previewEl.id;
+            img.src = \`/icons/\${icon}.svg\`;
+            img.alt = '';
+            img.className = 'w-full h-full object-contain';
+            img.onerror = function() { this.parentElement.innerHTML = ''; };
+            previewEl.replaceWith(img);
+          }
+        }
       }
 
       const child = appData && appData.children ? appData.children.find(c => c.id === childId) : null;
@@ -3743,7 +3818,7 @@ mode: single
 
         if (task) {
           task.title = title;
-          if (icon) task.icon = icon;
+          if (icon !== undefined) task.icon = icon;
         }
 
         const feedback = document.getElementById(\`feedback-task-\${childId}-\${taskId}\`);
@@ -3773,8 +3848,67 @@ mode: single
       }
     }
 
+    // ---- Drag-to-reorder tasks ----
+    let dragState = null; // { childId, taskId, sourceEl, overEl }
+
+    function handleTaskDragStart(event, childId, taskId) {
+      dragState = { childId, taskId, sourceEl: event.currentTarget, overEl: null };
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', taskId);
+      setTimeout(() => event.currentTarget.classList.add('opacity-40', 'scale-95'), 0);
+    }
+
+    function handleTaskDragEnd(event) {
+      event.currentTarget.classList.remove('opacity-40', 'scale-95');
+      document.querySelectorAll('.task-drag-row').forEach(el => {
+        el.classList.remove('border-indigo-400');
+      });
+      dragState = null;
+    }
+
+    function handleTaskDragOver(event) {
+      if (!dragState) return;
+      const target = event.currentTarget.closest('.task-drag-row');
+      if (!target || target === dragState.sourceEl) return;
+      document.querySelectorAll('.task-drag-row').forEach(el => el.classList.remove('border-indigo-400'));
+      target.classList.add('border-indigo-400');
+      dragState.overEl = target;
+    }
+
+    async function handleTaskDrop(event, childId) {
+      event.preventDefault();
+      if (!dragState || dragState.childId !== childId || !dragState.overEl) return;
+
+      const list = event.currentTarget;
+      const rows = Array.from(list.querySelectorAll('.task-drag-row'));
+      const sourceIdx = rows.indexOf(dragState.sourceEl);
+      const targetIdx = rows.indexOf(dragState.overEl);
+      if (sourceIdx === -1 || targetIdx === -1 || sourceIdx === targetIdx) return;
+
+      if (sourceIdx < targetIdx) {
+        dragState.overEl.after(dragState.sourceEl);
+      } else {
+        dragState.overEl.before(dragState.sourceEl);
+      }
+
+      const newOrder = Array.from(list.querySelectorAll('.task-drag-row')).map(el => el.dataset.taskId);
+
+      try {
+        const res = await fetch(\`/api/children/\${childId}/tasks/reorder\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskIds: newOrder })
+        });
+        if (!res.ok) throw new Error('Reorder failed');
+        showToast('סדר המשימות עודכן ✓');
+      } catch (err) {
+        showToast('שגיאה בשמירת הסדר: ' + err.message, 'error');
+        renderManageTab();
+      }
+    }
+
     async function confirmResetDay() {
-      if (!confirm('האם לאפס את סימוני כל המשימות ליום חדש?\\n(שימו לב: שמות הילדים, המשימות וההיסטוריה נשמרים כרגיל!)')) return;
+      if (!confirm('האם לאפס את סימוני כל המשימות ליום חדש?\n(שימו לב: שמות הילדים, המשימות וההיסטוריה נשמרים כרגיל!)')) return;
 
       try {
         const res = await fetch('/api/tasks/reset-day', { method: 'POST' });
