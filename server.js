@@ -3021,9 +3021,9 @@ mode: single
               <thead>
                 <tr class="text-xs font-bold uppercase tracking-wider text-slate-400">
                   <th class="text-right pb-2 pr-2">יום</th>
-                  <th class="pb-2 px-2">פעיל</th>
-                  <th class="pb-2 px-2">משעה</th>
-                  <th class="pb-2 px-2">עד שעה</th>
+                  <th class="text-center pb-2 px-2">פעיל</th>
+                  <th class="text-right pb-2 px-2">משעה</th>
+                  <th class="text-right pb-2 px-2">עד שעה</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-800" id="settings-bypass-days-table">
