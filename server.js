@@ -3908,7 +3908,7 @@ mode: single
     }
 
     async function confirmResetDay() {
-      if (!confirm('האם לאפס את סימוני כל המשימות ליום חדש?\n(שימו לב: שמות הילדים, המשימות וההיסטוריה נשמרים כרגיל!)')) return;
+      if (!confirm('האם לאפס את סימוני כל המשימות ליום חדש?\\n(שימו לב: שמות הילדים, המשימות וההיסטוריה נשמרים כרגיל!)')) return;
 
       try {
         const res = await fetch('/api/tasks/reset-day', { method: 'POST' });
