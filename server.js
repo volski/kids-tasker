@@ -4497,8 +4497,8 @@ function start() {
     }
   }
 
-  setInterval(runScheduler, 60 * 1000);
-  console.log('[Scheduler] Task auto-reset and bypass schedule running every 60s');
+  setInterval(runScheduler, 20 * 1000);
+  console.log('[Scheduler] Task auto-reset and bypass schedule running every 20s');
 
   server.listen(PORT, () => {
     console.log(`====================================================`);
