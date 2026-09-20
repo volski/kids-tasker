@@ -1,4 +1,4 @@
-const http = require('http');
+﻿const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
@@ -97,7 +97,16 @@ const DEFAULT_TASKS_DATA = {
   history: [],
   lastActiveDate: getTodayDateString(),
   homeAssistant: { ...DEFAULT_HASS_CONFIG },
-  parentPin: null
+  parentPin: null,
+  settings: {
+    resetTime: '06:00',
+    bypassSchedule: {
+      enabled: false,
+      days: [0, 1, 2, 3, 4, 5, 6],
+      startTime: '15:00',
+      endTime: '21:00'
+    }
+  }
 };
 
 // Detect intelligent default icon from title
@@ -137,6 +146,21 @@ function normalizeTasksData(data) {
     data.homeAssistant = { ...DEFAULT_HASS_CONFIG };
   } else {
     data.homeAssistant = { ...DEFAULT_HASS_CONFIG, ...data.homeAssistant };
+  }
+
+  if (!data.settings || typeof data.settings !== 'object') {
+    data.settings = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings));
+  } else {
+    if (typeof data.settings.resetTime !== 'string') data.settings.resetTime = '06:00';
+    if (!data.settings.bypassSchedule || typeof data.settings.bypassSchedule !== 'object') {
+      data.settings.bypassSchedule = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings.bypassSchedule));
+    } else {
+      const bs = data.settings.bypassSchedule;
+      if (typeof bs.enabled !== 'boolean') bs.enabled = false;
+      if (!Array.isArray(bs.days)) bs.days = [0,1,2,3,4,5,6];
+      if (typeof bs.startTime !== 'string') bs.startTime = '15:00';
+      if (typeof bs.endTime !== 'string') bs.endTime = '21:00';
+    }
   }
 
   // Ensure each task has completedAt and icon
@@ -1348,28 +1372,65 @@ app.post('/api/tasks/toggle', (req, res) => {
   }
 });
 
+// Shared helper: perform a day reset (used by API route and scheduler)
+function performResetDay() {
+  const data = readTasks();
+  data.children.forEach(child => {
+    child.tasks.forEach(task => {
+      task.completed = false;
+      task.completedAt = null;
+    });
+  });
+  data.lastActiveDate = getTodayDateString();
+  writeTasks(data);
+  io.emit('task_updated', data);
+  syncHassEntitiesDebounced().catch(() => {});
+  return data;
+}
+
 // API Endpoint: Reset day's task states (keeps children, names, tasks, and history!)
 app.post('/api/tasks/reset-day', (req, res) => {
   try {
-    const data = readTasks();
-    data.children.forEach(child => {
-      child.tasks.forEach(task => {
-        task.completed = false;
-        task.completedAt = null;
-      });
-    });
-    data.lastActiveDate = getTodayDateString();
-
-    writeTasks(data);
-    io.emit('task_updated', data);
-
-    // Automatically sync reset state with Home Assistant entities
-    syncHassEntitiesDebounced().catch(() => {});
-
+    const data = performResetDay();
     res.json({ success: true, message: 'All daily tasks have been reset', data });
   } catch (error) {
     console.error('Failed to reset daily tasks:', error);
     res.status(500).json({ error: 'Failed to reset daily tasks' });
+  }
+});
+
+// API Endpoint: Get settings
+app.get('/api/settings', (req, res) => {
+  try {
+    const data = readTasks();
+    res.json(data.settings || {});
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to read settings' });
+  }
+});
+
+// API Endpoint: Save settings
+app.post('/api/settings', (req, res) => {
+  try {
+    const { resetTime, bypassSchedule } = req.body;
+    const data = readTasks();
+    if (!data.settings) data.settings = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings));
+    if (resetTime !== undefined) {
+      data.settings.resetTime = (typeof resetTime === 'string') ? resetTime.trim() : '';
+    }
+    if (bypassSchedule && typeof bypassSchedule === 'object') {
+      data.settings.bypassSchedule = {
+        enabled: Boolean(bypassSchedule.enabled),
+        days: Array.isArray(bypassSchedule.days) ? bypassSchedule.days.map(Number).filter(d => d >= 0 && d <= 6) : [0,1,2,3,4,5,6],
+        startTime: typeof bypassSchedule.startTime === 'string' ? bypassSchedule.startTime : '15:00',
+        endTime: typeof bypassSchedule.endTime === 'string' ? bypassSchedule.endTime : '21:00'
+      };
+    }
+    writeTasks(data);
+    res.json({ success: true, settings: data.settings });
+  } catch (error) {
+    console.error('Failed to save settings:', error);
+    res.status(500).json({ error: 'Failed to save settings' });
   }
 });
 
@@ -2380,6 +2441,10 @@ app.get('/parent', (req, res) => {
         <span>🏠</span>
         <span>בית חכם (Home Assistant)</span>
       </button>
+      <button onclick="switchTab('settings')" id="tab-btn-settings" class="px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-slate-800/80 text-slate-300 hover:bg-slate-800">
+        <span>⚙️</span>
+        <span>הגדרות</span>
+      </button>
     </div>
   </div>
 
@@ -2808,6 +2873,105 @@ mode: single
 </pre>
       </div>
     </section>
+    <!-- TAB 5: Settings -->
+    <section id="tab-settings" class="hidden space-y-6">
+      <div>
+        <h2 class="text-2xl font-black text-white">הגדרות מערכת</h2>
+        <p class="text-sm text-slate-400 mt-1">תזמון אוטומטי לאיפוס משימות ולפתיחת הטלוויזיה</p>
+      </div>
+
+      <!-- Card 1: Auto Reset -->
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">🔄</span>
+          <div>
+            <h3 class="text-xl font-black text-white">איפוס משימות אוטומטי</h3>
+            <p class="text-xs text-slate-400 mt-0.5">כל יום בשעה שתבחר, המשימות יאופסו אוטומטית ויום חדש יתחיל</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap items-end gap-4">
+          <label class="flex flex-col gap-1.5">
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">שעת איפוס</span>
+            <input type="time" id="settings-reset-time"
+              class="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer pb-2">
+            <input type="checkbox" id="settings-reset-enabled" class="w-4 h-4 rounded accent-indigo-500">
+            <span class="text-sm text-slate-300 font-semibold">פעיל</span>
+          </label>
+          <button onclick="saveResetSettings()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition shadow-md">שמור ⚙️</button>
+          <span id="settings-reset-feedback" class="text-xs font-bold text-emerald-400 hidden">✓ נשמר!</span>
+        </div>
+        <div id="settings-reset-status" class="text-xs text-slate-500"></div>
+      </div>
+
+      <!-- Card 2: Bypass Schedule -->
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
+        <div class="flex items-center gap-3">
+          <span class="text-2xl">📺</span>
+          <div>
+            <h3 class="text-xl font-black text-white">לוח זמנים לפתיחת טלוויזיה</h3>
+            <p class="text-xs text-slate-400 mt-0.5">הגדר מתי הביפאס מופעל אוטומטית — הילדים יוכלו לצפות בטלוויזיה בלי לבצע משימות</p>
+          </div>
+        </div>
+
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" id="settings-bypass-enabled" class="w-5 h-5 rounded accent-purple-500">
+          <span class="text-base font-bold text-slate-200">הפעל לוח זמנים לביפאס</span>
+        </label>
+
+        <div id="settings-bypass-details" class="space-y-4 pt-1">
+          <div>
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2">ימים פעילים</span>
+            <div class="flex flex-wrap gap-2" id="settings-bypass-days">
+              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
+                <input type="checkbox" value="0" class="accent-purple-500"> א׳
+              </label>
+              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
+                <input type="checkbox" value="1" class="accent-purple-500"> ב׳
+              </label>
+              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
+                <input type="checkbox" value="2" class="accent-purple-500"> ג׳
+              </label>
+              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
+                <input type="checkbox" value="3" class="accent-purple-500"> ד׳
+              </label>
+              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
+                <input type="checkbox" value="4" class="accent-purple-500"> ה׳
+              </label>
+              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
+                <input type="checkbox" value="5" class="accent-purple-500"> ו׳
+              </label>
+              <label class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 rounded-xl cursor-pointer text-sm font-semibold text-slate-300">
+                <input type="checkbox" value="6" class="accent-purple-500"> ש׳
+              </label>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-5">
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">שעת התחלה</span>
+              <input type="time" id="settings-bypass-start"
+                class="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+            </label>
+            <label class="flex flex-col gap-1.5">
+              <span class="text-xs font-bold text-slate-300 uppercase tracking-wider">שעת סיום</span>
+              <input type="time" id="settings-bypass-end"
+                class="px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+            </label>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 pt-1">
+          <button onclick="saveBypassSchedule()" class="px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl text-sm transition shadow-md">שמור לוח זמנים 📅</button>
+          <span id="settings-bypass-feedback" class="text-xs font-bold text-emerald-400 hidden">✓ נשמר!</span>
+        </div>
+        <div id="settings-bypass-status" class="text-xs text-slate-500"></div>
+      </div>
+    </section>
 
   </main>
 
@@ -2863,7 +3027,7 @@ mode: single
 
     function switchTab(tab) {
       activeTab = tab;
-      ['status', 'manage', 'history', 'hass'].forEach(t => {
+      ['status', 'manage', 'history', 'hass', 'settings'].forEach(t => {
         const section = document.getElementById('tab-' + t);
         const btn = document.getElementById('tab-btn-' + t);
         if (t === tab) {
@@ -2880,6 +3044,8 @@ mode: single
       } else if (tab === 'hass') {
         loadHassConfig();
         loadCardYamlAndPreview();
+      } else if (tab === 'settings') {
+        loadSettings();
       }
     }
 
@@ -3907,6 +4073,113 @@ mode: single
       }
     }
 
+    // ---- Settings Tab ----
+    let settingsData = {};
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        settingsData = await res.json();
+        renderSettingsTab();
+      } catch (e) {
+        showToast('שגיאה בטעינת הגדרות', 'error');
+      }
+    }
+
+    function renderSettingsTab() {
+      const s = settingsData;
+      // Reset time
+      const resetEnabled = s.resetTime && s.resetTime.trim() !== '';
+      const resetTimeEl = document.getElementById('settings-reset-time');
+      const resetEnabledEl = document.getElementById('settings-reset-enabled');
+      if (resetTimeEl) resetTimeEl.value = s.resetTime || '06:00';
+      if (resetEnabledEl) resetEnabledEl.checked = resetEnabled;
+      const resetStatus = document.getElementById('settings-reset-status');
+      if (resetStatus) {
+        resetStatus.textContent = resetEnabled
+          ? \`איפוס אוטומטי מתוזמן לשעה \${s.resetTime} בכל יום\`
+          : 'איפוס אוטומטי כבוי';
+      }
+      // Bypass schedule
+      const bs = s.bypassSchedule || {};
+      const bypassEnabledEl = document.getElementById('settings-bypass-enabled');
+      if (bypassEnabledEl) bypassEnabledEl.checked = Boolean(bs.enabled);
+      toggleBypassDetails(Boolean(bs.enabled));
+      // Days
+      document.querySelectorAll('#settings-bypass-days input[type=checkbox]').forEach(cb => {
+        cb.checked = Array.isArray(bs.days) && bs.days.includes(parseInt(cb.value));
+      });
+      const startEl = document.getElementById('settings-bypass-start');
+      const endEl = document.getElementById('settings-bypass-end');
+      if (startEl) startEl.value = bs.startTime || '15:00';
+      if (endEl) endEl.value = bs.endTime || '21:00';
+      // Status
+      const bypassStatus = document.getElementById('settings-bypass-status');
+      if (bypassStatus) {
+        if (!bs.enabled) {
+          bypassStatus.textContent = 'לוח הזמנים כבוי';
+        } else {
+          const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+          const dayLabels = (bs.days || []).map(d => dayNames[d]).join(', ');
+          bypassStatus.textContent = \`פעיל בימים: \${dayLabels} • \${bs.startTime || ''}–\${bs.endTime || ''}\`;
+        }
+      }
+    }
+
+    function toggleBypassDetails(show) {
+      const el = document.getElementById('settings-bypass-details');
+      if (el) el.style.opacity = show ? '1' : '0.4';
+    }
+
+    document.getElementById('settings-bypass-enabled')?.addEventListener('change', function() {
+      toggleBypassDetails(this.checked);
+    });
+
+    async function saveResetSettings() {
+      const enabledEl = document.getElementById('settings-reset-enabled');
+      const timeEl = document.getElementById('settings-reset-time');
+      const resetTime = (enabledEl && enabledEl.checked) ? (timeEl ? timeEl.value : '06:00') : '';
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resetTime })
+        });
+        if (!res.ok) throw new Error('save failed');
+        const d = await res.json();
+        settingsData = d.settings;
+        renderSettingsTab();
+        const fb = document.getElementById('settings-reset-feedback');
+        if (fb) { fb.classList.remove('hidden'); setTimeout(() => fb.classList.add('hidden'), 2500); }
+        showToast('הגדרות האיפוס נשמרו ✓');
+      } catch (e) {
+        showToast('שגיאה בשמירת הגדרות: ' + e.message, 'error');
+      }
+    }
+
+    async function saveBypassSchedule() {
+      const enabled = document.getElementById('settings-bypass-enabled')?.checked || false;
+      const days = Array.from(document.querySelectorAll('#settings-bypass-days input[type=checkbox]:checked')).map(cb => parseInt(cb.value));
+      const startTime = document.getElementById('settings-bypass-start')?.value || '15:00';
+      const endTime = document.getElementById('settings-bypass-end')?.value || '21:00';
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bypassSchedule: { enabled, days, startTime, endTime } })
+        });
+        if (!res.ok) throw new Error('save failed');
+        const d = await res.json();
+        settingsData = d.settings;
+        renderSettingsTab();
+        const fb = document.getElementById('settings-bypass-feedback');
+        if (fb) { fb.classList.remove('hidden'); setTimeout(() => fb.classList.add('hidden'), 2500); }
+        showToast('לוח הזמנים נשמר ✓');
+      } catch (e) {
+        showToast('שגיאה בשמירת לוח הזמנים: ' + e.message, 'error');
+      }
+    }
+
     async function confirmResetDay() {
       if (!confirm('האם לאפס את סימוני כל המשימות ליום חדש?\\n(שימו לב: שמות הילדים, המשימות וההיסטוריה נשמרים כרגיל!)')) return;
 
@@ -4046,6 +4319,61 @@ function start() {
   initTasksStorage();
   startHassPolling();
   startHassEventListener();
+
+  // ---- Settings-based scheduler: auto-reset + bypass schedule ----
+  let lastAutoResetDate = null;
+  let lastScheduledBypassState = null;
+
+  function runScheduler() {
+    try {
+      const data = readTasks();
+      const settings = data.settings || {};
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const timeNow = `${hh}:${mm}`;
+      const todayStr = getTodayDateString();
+      const dayOfWeek = now.getDay(); // 0=Sunday
+
+      // --- Auto-reset tasks ---
+      const resetTime = (settings.resetTime || '').trim();
+      if (resetTime && timeNow === resetTime && lastAutoResetDate !== todayStr) {
+        console.log(`[Scheduler] Auto-resetting tasks at ${resetTime}`);
+        lastAutoResetDate = todayStr;
+        performResetDay();
+      }
+
+      // --- Bypass schedule ---
+      const bs = settings.bypassSchedule;
+      if (bs && bs.enabled) {
+        const inDay = Array.isArray(bs.days) && bs.days.includes(dayOfWeek);
+        let inTime = false;
+        if (bs.startTime && bs.endTime) {
+          if (bs.endTime > bs.startTime) {
+            inTime = timeNow >= bs.startTime && timeNow < bs.endTime;
+          } else {
+            // Overnight window (e.g. 22:00 - 06:00)
+            inTime = timeNow >= bs.startTime || timeNow < bs.endTime;
+          }
+        }
+        const shouldBypass = inDay && inTime;
+        if (shouldBypass !== lastScheduledBypassState) {
+          lastScheduledBypassState = shouldBypass;
+          console.log(`[Scheduler] Bypass schedule: ${shouldBypass ? 'ACTIVATING' : 'DEACTIVATING'} bypass`);
+          data.homeAssistant.parentBypass = shouldBypass;
+          writeTasks(data);
+          io.emit('task_updated', data);
+          syncHassEntitiesDebounced().catch(() => {});
+        }
+      }
+    } catch (err) {
+      console.error('[Scheduler] Error:', err);
+    }
+  }
+
+  setInterval(runScheduler, 60 * 1000);
+  console.log('[Scheduler] Task auto-reset and bypass schedule running every 60s');
+
   server.listen(PORT, () => {
     console.log(`====================================================`);
     console.log(` kids-tasker server is running!`);
