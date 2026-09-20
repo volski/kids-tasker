@@ -6,7 +6,7 @@ const { io } = require('socket.io-client');
 
 const TEST_PORT = 3461;
 const MOCK_HASS_PORT = 8200;
-const TEST_TASKS_FILE = path.join(__dirname, 'tasks.test.json');
+const TEST_DB_DIR = path.join(__dirname, 'test_db');
 
 async function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -202,9 +202,10 @@ function createMockHassServer() {
 async function runTests() {
   console.log('--- Starting Automatic Home Assistant Entity Creation Tests ---');
 
-  if (fs.existsSync(TEST_TASKS_FILE)) {
-    fs.unlinkSync(TEST_TASKS_FILE);
+  if (fs.existsSync(TEST_DB_DIR)) {
+    fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
   }
+  fs.mkdirSync(TEST_DB_DIR, { recursive: true });
 
   // 1. Start Mock Home Assistant Server
   const mockHass = createMockHassServer();
@@ -213,7 +214,7 @@ async function runTests() {
 
   // 2. Start kids-tasker server
   const serverProcess = spawn('node', ['server.js'], {
-    env: { ...process.env, PORT: TEST_PORT.toString(), TASKS_FILE: TEST_TASKS_FILE },
+    env: { ...process.env, PORT: TEST_PORT.toString(), DB_DIR: TEST_DB_DIR },
     stdio: 'pipe'
   });
 
@@ -501,8 +502,8 @@ async function runTests() {
   } finally {
     try { serverProcess.kill(); } catch (e) {}
     try { mockHass.server.close(); } catch (e) {}
-    if (fs.existsSync(TEST_TASKS_FILE)) {
-      fs.unlinkSync(TEST_TASKS_FILE);
+    if (fs.existsSync(TEST_DB_DIR)) {
+      fs.rmSync(TEST_DB_DIR, { recursive: true, force: true });
     }
   }
 }
