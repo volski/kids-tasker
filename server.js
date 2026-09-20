@@ -27,7 +27,11 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const TASKS_FILE = process.env.TASKS_FILE || path.join(__dirname, 'tasks.json');
+const DB_DIR = process.env.DB_DIR || (process.env.TASKS_FILE ? path.dirname(process.env.TASKS_FILE) : path.join(__dirname, 'db'));
+const DB_TASKS = path.join(DB_DIR, 'tasks.json');
+const DB_HISTORY = path.join(DB_DIR, 'history.json');
+const DB_CONFIG = path.join(DB_DIR, 'config.json');
+const DB_SETTINGS = path.join(DB_DIR, 'settings.json');
 const ICONS_DIR = path.join(__dirname, 'icons');
 
 // Serve icons directory statically
@@ -206,54 +210,110 @@ function normalizeTasksData(data) {
 }
 
 // Persistence helper functions
+// Database Migration & Initialization
 function initTasksStorage() {
   try {
-    const dir = path.dirname(TASKS_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
     }
-    if (!fs.existsSync(TASKS_FILE)) {
-      console.log(`[Storage] ${TASKS_FILE} not found. Initializing with default data...`);
-      fs.writeFileSync(TASKS_FILE, JSON.stringify(DEFAULT_TASKS_DATA, null, 2), 'utf-8');
-      console.log(`[Storage] ${TASKS_FILE} successfully created.`);
-    } else {
-      const content = fs.readFileSync(TASKS_FILE, 'utf-8');
-      const parsed = JSON.parse(content);
-      const normalized = normalizeTasksData(parsed);
-      fs.writeFileSync(TASKS_FILE, JSON.stringify(normalized, null, 2), 'utf-8');
-      console.log(`[Storage] Verified and normalized existing ${TASKS_FILE}`);
+
+    // Check for legacy monolithic file
+    const legacyPath = path.join(__dirname, 'tasks.json');
+    const legacyExists = fs.existsSync(legacyPath);
+    let migrationSource = null;
+
+    if (fs.existsSync(DB_TASKS)) {
+      try {
+        const testData = JSON.parse(fs.readFileSync(DB_TASKS, 'utf-8'));
+        if (testData.homeAssistant !== undefined || testData.settings !== undefined) {
+          migrationSource = DB_TASKS; // Existing DB_TASKS is monolithic (e.g. from Proxmox setups)
+        }
+      } catch(e) {}
+    } else if (legacyExists) {
+      migrationSource = legacyPath;
     }
+
+    if (migrationSource) {
+      console.log(`[Storage] Migrating monolithic JSON from ${migrationSource} to modular structure in ${DB_DIR}...`);
+      try {
+        const oldData = JSON.parse(fs.readFileSync(migrationSource, 'utf-8'));
+        fs.copyFileSync(migrationSource, migrationSource + '.backup_migrated');
+        
+        fs.writeFileSync(DB_TASKS, JSON.stringify({ children: oldData.children || [], lastActiveDate: oldData.lastActiveDate || getTodayDateString() }, null, 2));
+        fs.writeFileSync(DB_HISTORY, JSON.stringify(oldData.history || [], null, 2));
+        fs.writeFileSync(DB_CONFIG, JSON.stringify({ homeAssistant: oldData.homeAssistant || { ...DEFAULT_HASS_CONFIG }, parentPin: oldData.parentPin || null }, null, 2));
+        fs.writeFileSync(DB_SETTINGS, JSON.stringify(oldData.settings || {}, null, 2));
+        
+        if (migrationSource === legacyPath && DB_TASKS !== legacyPath) {
+          fs.renameSync(legacyPath, legacyPath + '.backup_migrated');
+        }
+        console.log('[Storage] Migration complete.');
+      } catch (e) {
+        console.error('[Storage Error] Failed to migrate:', e);
+      }
+    }
+
+    // Initialize any missing files with defaults
+    if (!fs.existsSync(DB_TASKS)) fs.writeFileSync(DB_TASKS, JSON.stringify({ children: DEFAULT_TASKS_DATA.children, lastActiveDate: getTodayDateString() }, null, 2));
+    if (!fs.existsSync(DB_HISTORY)) fs.writeFileSync(DB_HISTORY, JSON.stringify(DEFAULT_TASKS_DATA.history, null, 2));
+    if (!fs.existsSync(DB_CONFIG)) fs.writeFileSync(DB_CONFIG, JSON.stringify({ homeAssistant: { ...DEFAULT_HASS_CONFIG }, parentPin: null }, null, 2));
+    if (!fs.existsSync(DB_SETTINGS)) fs.writeFileSync(DB_SETTINGS, JSON.stringify(DEFAULT_TASKS_DATA.settings, null, 2));
+
   } catch (error) {
-    console.error(`[Storage Error] Initializing ${TASKS_FILE}:`, error);
+    console.error(`[Storage Error] Initializing DB:`, error);
   }
 }
 
 function readTasks() {
   try {
-    if (!fs.existsSync(TASKS_FILE)) {
+    if (!fs.existsSync(DB_TASKS)) {
       initTasksStorage();
     }
-    const data = fs.readFileSync(TASKS_FILE, 'utf-8');
-    const parsed = JSON.parse(data);
-    return normalizeTasksData(parsed);
+    
+    let tData = { children: [], lastActiveDate: getTodayDateString() };
+    let hData = [];
+    let cData = { homeAssistant: { ...DEFAULT_HASS_CONFIG }, parentPin: null };
+    let sData = {};
+
+    try { tData = JSON.parse(fs.readFileSync(DB_TASKS, 'utf-8')); } catch(e) {}
+    try { hData = JSON.parse(fs.readFileSync(DB_HISTORY, 'utf-8')); } catch(e) {}
+    try { cData = JSON.parse(fs.readFileSync(DB_CONFIG, 'utf-8')); } catch(e) {}
+    try { sData = JSON.parse(fs.readFileSync(DB_SETTINGS, 'utf-8')); } catch(e) {}
+
+    const combined = {
+      children: tData.children || [],
+      lastActiveDate: tData.lastActiveDate || getTodayDateString(),
+      history: Array.isArray(hData) ? hData : [],
+      homeAssistant: cData.homeAssistant || { ...DEFAULT_HASS_CONFIG },
+      parentPin: cData.parentPin || null,
+      settings: sData || {}
+    };
+
+    return normalizeTasksData(combined);
   } catch (error) {
-    console.error(`[Storage Error] Reading ${TASKS_FILE}:`, error);
+    console.error(`[Storage Error] Reading DB:`, error);
     return normalizeTasksData(DEFAULT_TASKS_DATA);
   }
 }
 
 function writeTasks(data) {
   try {
-    const dir = path.dirname(TASKS_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
     }
-    const normalized = normalizeTasksData(data);
-    const content = JSON.stringify(normalized, null, 2);
-    fs.writeFileSync(TASKS_FILE, content, 'utf-8');
+    
+    const tData = { children: data.children || [], lastActiveDate: data.lastActiveDate || getTodayDateString() };
+    const hData = data.history || [];
+    const cData = { homeAssistant: data.homeAssistant || { ...DEFAULT_HASS_CONFIG }, parentPin: data.parentPin || null };
+    const sData = data.settings || {};
+
+    fs.writeFileSync(DB_TASKS, JSON.stringify(tData, null, 2), 'utf-8');
+    fs.writeFileSync(DB_HISTORY, JSON.stringify(hData, null, 2), 'utf-8');
+    fs.writeFileSync(DB_CONFIG, JSON.stringify(cData, null, 2), 'utf-8');
+    fs.writeFileSync(DB_SETTINGS, JSON.stringify(sData, null, 2), 'utf-8');
+    
   } catch (error) {
-    console.error(`[Storage Error] Writing to ${TASKS_FILE}:`, error);
-    throw error;
+    console.error(`[Storage Error] Writing DB:`, error);
   }
 }
 
@@ -4446,7 +4506,7 @@ function start() {
     console.log(` Kids Board URL:    http://localhost:${PORT}`);
     console.log(` Parents Dash URL:  http://localhost:${PORT}/parent`);
     console.log(` HASS Status API:   http://localhost:${PORT}/api/hass/status`);
-    console.log(` Tasks file:        ${TASKS_FILE}`);
+    console.log(` Database dir:      ${DB_DIR}`);
     console.log(`====================================================`);
   });
 }
