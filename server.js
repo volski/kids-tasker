@@ -1989,6 +1989,40 @@ app.get('/', (req, res) => {
       }
     }
 
+    // Pull-to-refresh: swipe down from top → hard reload
+    (function initPullToRefresh() {
+      let startY = 0;
+      let pulling = false;
+      const THRESHOLD = 120;
+
+      document.addEventListener('touchstart', e => {
+        if (window.scrollY === 0) {
+          startY = e.touches[0].clientY;
+          pulling = true;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchmove', e => {
+        if (!pulling) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 10 && window.scrollY === 0) {
+          document.body.style.transition = 'transform 0.1s';
+          document.body.style.transform = \`translateY(\${Math.min(dy * 0.4, 60)}px)\`;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', e => {
+        if (!pulling) return;
+        const dy = e.changedTouches[0].clientY - startY;
+        document.body.style.transition = 'transform 0.2s';
+        document.body.style.transform = '';
+        if (dy >= THRESHOLD && window.scrollY === 0) {
+          location.reload();
+        }
+        pulling = false;
+      }, { passive: true });
+    })();
+
     fetchTasks();
 
     // ==========================================
@@ -2852,6 +2886,40 @@ mode: single
         socket.connect();
       }
     }
+
+    // Pull-to-refresh: swipe down from top → hard reload
+    (function initPullToRefresh() {
+      let startY = 0;
+      let pulling = false;
+      const THRESHOLD = 120;
+
+      document.addEventListener('touchstart', e => {
+        if (window.scrollY === 0) {
+          startY = e.touches[0].clientY;
+          pulling = true;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchmove', e => {
+        if (!pulling) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 10 && window.scrollY === 0) {
+          document.body.style.transition = 'transform 0.1s';
+          document.body.style.transform = \`translateY(\${Math.min(dy * 0.4, 60)}px)\`;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', e => {
+        if (!pulling) return;
+        const dy = e.changedTouches[0].clientY - startY;
+        document.body.style.transition = 'transform 0.2s';
+        document.body.style.transform = '';
+        if (dy >= THRESHOLD && window.scrollY === 0) {
+          location.reload();
+        }
+        pulling = false;
+      }, { passive: true });
+    })();
 
     async function loadIcons() {
       try {
