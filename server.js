@@ -1,8 +1,10 @@
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const { Server } = require('socket.io');
+const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
 
 // WebSocket client support across all Node.js versions (including Node 20 LTS on Proxmox/Debian)
 const WebSocket = (() => {
@@ -44,6 +46,96 @@ if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 app.use('/sounds', express.static(SOUNDS_DIR));
+
+// Server-side TTS (Edge neural voices) with on-disk mp3 cache
+const TTS_VOICES = { female: 'he-IL-HilaNeural', male: 'he-IL-AvriNeural' };
+const TTS_VOICE_ENV = process.env.TTS_VOICE;
+const TTS_CACHE_DIR = path.join(SOUNDS_DIR, 'tts-cache');
+if (!fs.existsSync(TTS_CACHE_DIR)) {
+  fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
+}
+const ttsInflight = new Map();
+
+function resolveTtsVoice(v) {
+  const pick = (x) => TTS_VOICES[x] || (Object.values(TTS_VOICES).includes(x) ? x : null);
+  return pick(v) || pick(TTS_VOICE_ENV) || TTS_VOICES.female;
+}
+
+function ttsCachePath(text, voiceName) {
+  const hash = crypto.createHash('md5').update(voiceName + '|' + text).digest('hex');
+  return path.join(TTS_CACHE_DIR, hash + '.mp3');
+}
+
+async function synthesizeTtsToFile(text, outPath, voiceName) {
+  const tts = new MsEdgeTTS();
+  const tmpPath = outPath + '.' + process.pid + '.tmp';
+  try {
+    await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
+    const { audioStream } = tts.toStream(text);
+    await new Promise((resolve, reject) => {
+      const writer = fs.createWriteStream(tmpPath);
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+      audioStream.on('error', reject);
+      audioStream.pipe(writer);
+    });
+    if (!fs.existsSync(tmpPath) || fs.statSync(tmpPath).size === 0) {
+      throw new Error('TTS produced empty audio');
+    }
+    fs.renameSync(tmpPath, outPath);
+    return outPath;
+  } finally {
+    try { tts.close(); } catch (e) {}
+    try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (e) {}
+  }
+}
+
+function ensureTtsAudio(text, voice) {
+  const voiceName = resolveTtsVoice(voice);
+  const outPath = ttsCachePath(text, voiceName);
+  if (fs.existsSync(outPath) && fs.statSync(outPath).size > 0) {
+    return Promise.resolve(outPath);
+  }
+  if (ttsInflight.has(outPath)) return ttsInflight.get(outPath);
+  const p = Promise.race([
+    synthesizeTtsToFile(text, outPath, voiceName),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('TTS synthesis timed out')), 20000))
+  ]).finally(() => ttsInflight.delete(outPath));
+  ttsInflight.set(outPath, p);
+  return p;
+}
+
+function warmTtsCache(data) {
+  try {
+    const presets = (data && data.settings && data.settings.audio && Array.isArray(data.settings.audio.presets))
+      ? data.settings.audio.presets : [];
+    const items = new Map();
+    const addText = (val, voice) => {
+      const text = String(val || '').trim();
+      if (text && !text.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) && !text.startsWith('/sounds/')) {
+        items.set(resolveTtsVoice(voice) + '|' + text, { text, voice });
+      }
+    };
+    presets.forEach(p => {
+      const isObj = p && typeof p === 'object';
+      const type = isObj ? (p.type || 'tts') : 'tts';
+      if (type === 'tts') addText(isObj ? (p.value || p.name) : p, isObj ? p.voice : null);
+    });
+    ((data && data.children) || []).forEach(c => {
+      (c.tasks || []).forEach(t => {
+        const fb = String(t.audioFeedback || '').trim();
+        if (!fb) return;
+        const preset = presets.find(p => p && typeof p === 'object' && (p.id === fb || p.value === fb || p.name === fb));
+        addText(preset ? (preset.value || preset.name) : fb, preset ? preset.voice : null);
+      });
+    });
+    [...items.values()].reduce((chain, item) => chain.then(() =>
+      ensureTtsAudio(item.text, item.voice).catch(err => console.warn(`[TTS] Cache warm failed for "${item.text}":`, err.message))
+    ), Promise.resolve()).then(() => console.log('[TTS] Cache warm complete'));
+  } catch (err) {
+    console.warn('[TTS] Cache warm failed:', err.message);
+  }
+}
 
 // Helper for local YYYY-MM-DD
 function getTodayDateString() {
@@ -176,9 +268,9 @@ function normalizeTasksData(data) {
       }
       if (!Array.isArray(data.settings.audio.presets) || data.settings.audio.presets.length === 0) {
         data.settings.audio.presets = [
-          { id: 'tts_1', type: 'tts', name: 'כל הכבוד!', value: 'כל הכבוד!' },
-          { id: 'tts_2', type: 'tts', name: 'יופי של עבודה!', value: 'יופי של עבודה!' },
-          { id: 'tts_3', type: 'tts', name: 'אלוף!', value: 'אלוף!' }
+          { id: 'tts_1', type: 'tts', name: 'כל הכבוד!', value: 'כל הכבוד!', voice: 'female' },
+          { id: 'tts_2', type: 'tts', name: 'יופי של עבודה!', value: 'יופי של עבודה!', voice: 'female' },
+          { id: 'tts_3', type: 'tts', name: 'אלוף!', value: 'אלוף!', voice: 'female' }
         ];
       } else {
         data.settings.audio.presets = data.settings.audio.presets.map((p, idx) => {
@@ -189,7 +281,8 @@ function normalizeTasksData(data) {
               id: p.id || (type + '_' + idx),
               type: type,
               name: String(p.name || val).trim(),
-              value: val
+              value: val,
+              voice: (p.voice === 'male' || p.voice === 'female') ? p.voice : 'female'
             };
           } else {
             const str = String(p).trim();
@@ -198,7 +291,8 @@ function normalizeTasksData(data) {
               id: type + '_' + idx,
               type: type,
               name: str,
-              value: str
+              value: str,
+              voice: 'female'
             };
           }
         }).filter(p => p.value);
@@ -1147,6 +1241,21 @@ app.get('/api/sounds', (req, res) => {
   }
 });
 
+// API Endpoint: Server-side TTS, returns a cached mp3
+app.get('/api/tts', async (req, res) => {
+  try {
+    const text = String(req.query.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Missing text' });
+    if (text.length > 500) return res.status(400).json({ error: 'Text too long' });
+    const filePath = await ensureTtsAudio(text, req.query.voice);
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.sendFile(filePath);
+  } catch (err) {
+    console.error('[TTS] Generation failed:', err);
+    res.status(500).json({ error: 'TTS generation failed' });
+  }
+});
+
 app.get('/api/icons', (req, res) => {
   try {
     const files = fs.readdirSync(ICONS_DIR).filter(f => f.endsWith('.svg'));
@@ -1704,7 +1813,8 @@ app.post('/api/settings', (req, res) => {
               id: p.id || (type + '_' + Date.now() + '_' + idx),
               type: type,
               name: String(p.name || val).trim(),
-              value: val
+              value: val,
+              voice: (p.voice === 'male' || p.voice === 'female') ? p.voice : 'female'
             };
           } else {
             const str = String(p).trim();
@@ -1713,7 +1823,8 @@ app.post('/api/settings', (req, res) => {
               id: type + '_' + Date.now() + '_' + idx,
               type: type,
               name: str,
-              value: str
+              value: str,
+              voice: 'female'
             };
           }
         }).filter(p => p.value);
@@ -1742,6 +1853,7 @@ app.post('/api/settings', (req, res) => {
       }
     }
     writeTasks(data);
+    warmTtsCache(data);
     res.json({ success: true, settings: data.settings });
   } catch (error) {
     console.error('Failed to save settings:', error);
@@ -2436,10 +2548,12 @@ app.get('/', (req, res) => {
 
       let type = 'tts';
       let value = feedback;
+      let voice = '';
 
       if (preset) {
         type = preset.type || 'tts';
         value = preset.value || preset.name || feedback;
+        voice = preset.voice || '';
       } else if (feedback.match(/\\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) || feedback.startsWith('/sounds/')) {
         type = 'audio';
       }
@@ -2482,16 +2596,34 @@ app.get('/', (req, res) => {
             });
           }
         } else {
-          if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(value);
-            utterance.lang = 'he-IL';
-            utterance.rate = 1.0;
-            utterance.onend = doneCallback;
-            utterance.onerror = doneCallback;
-            window.speechSynthesis.speak(utterance);
-          } else {
-            doneCallback();
+          const ttsAudio = new Audio('/api/tts?text=' + encodeURIComponent(value) + (voice ? '&voice=' + encodeURIComponent(voice) : ''));
+          let ttsFellBack = false;
+          const fallbackSpeech = () => {
+            if (ttsFellBack || finished) return;
+            ttsFellBack = true;
+            if ('speechSynthesis' in window) {
+              window.speechSynthesis.cancel();
+              const utterance = new SpeechSynthesisUtterance(value);
+              utterance.lang = 'he-IL';
+              utterance.rate = 1.0;
+              utterance.onend = doneCallback;
+              utterance.onerror = doneCallback;
+              window.speechSynthesis.speak(utterance);
+            } else {
+              doneCallback();
+            }
+          };
+          ttsAudio.addEventListener('ended', doneCallback, { once: true });
+          ttsAudio.addEventListener('error', (err) => {
+            console.warn('Server TTS failed, falling back to speechSynthesis', err);
+            fallbackSpeech();
+          }, { once: true });
+          const ttsPlayPromise = ttsAudio.play();
+          if (ttsPlayPromise !== undefined) {
+            ttsPlayPromise.catch(err => {
+              console.warn('Server TTS play failed, falling back to speechSynthesis', err);
+              fallbackSpeech();
+            });
           }
         }
       } catch (err) {
@@ -3953,7 +4085,8 @@ mode: single
         id: 'tts_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         type: 'tts',
         name: val,
-        value: val
+        value: val,
+        voice: 'female'
       };
       
       settingsData.audio.presets.push(newPreset);
@@ -4000,10 +4133,12 @@ mode: single
       
       let type = 'tts';
       let val = '';
+      let voice = '';
       
       if (typeof entry === 'object' && entry !== null) {
         type = entry.type || (entry.value && entry.value.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts');
         val = entry.value || entry.text || entry.name || '';
+        voice = entry.voice || '';
       } else if (typeof entry === 'string') {
         val = entry;
         type = val.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts';
@@ -4016,14 +4151,37 @@ mode: single
         window._currentAudio = new Audio(soundUrl);
         window._currentAudio.play().catch(e => console.warn('Audio play failed:', e));
       } else {
-        if ('speechSynthesis' in window) {
-          const u = new SpeechSynthesisUtterance(val);
-          u.lang = 'he-IL';
-          speechSynthesis.speak(u);
-        }
+        let ttsFellBack = false;
+        const ttsFallback = () => {
+          if (ttsFellBack) return;
+          ttsFellBack = true;
+          if ('speechSynthesis' in window) {
+            const u = new SpeechSynthesisUtterance(val);
+            u.lang = 'he-IL';
+            speechSynthesis.speak(u);
+          }
+        };
+        window._currentAudio = new Audio('/api/tts?text=' + encodeURIComponent(val) + (voice ? '&voice=' + encodeURIComponent(voice) : ''));
+        window._currentAudio.addEventListener('error', ttsFallback, { once: true });
+        window._currentAudio.play().catch(e => {
+          console.warn('Audio play failed:', e);
+          ttsFallback();
+        });
       }
     };
     
+    window.setPresetVoice = async function(idx, voice) {
+      const presets = settingsData && settingsData.audio && settingsData.audio.presets;
+      if (!Array.isArray(presets) || !presets[idx]) return;
+      let p = presets[idx];
+      if (typeof p !== 'object' || p === null) {
+        p = { id: 'tts_' + Date.now() + '_' + idx, type: 'tts', name: String(p), value: String(p) };
+        presets[idx] = p;
+      }
+      p.voice = voice === 'male' ? 'male' : 'female';
+      await saveAudioPresets();
+    };
+
     window.playPresetByIndex = function(idx) {
       const presets = (settingsData && settingsData.audio && Array.isArray(settingsData.audio.presets)) ? settingsData.audio.presets : [];
       const item = presets[idx];
@@ -5028,6 +5186,13 @@ mode: single
               ? \`<span class="text-[11px] font-semibold px-2 py-0.5 rounded-md border bg-amber-950/70 text-amber-300 border-amber-700/60">בשימוש ב-\${usedCount} משימות 🔒</span>\` 
               : '';
             
+            const pVoice = (isObj && preset.voice === 'male') ? 'male' : 'female';
+            const voiceSelectHtml = pType === 'tts' ? \`
+              <select onchange="window.setPresetVoice(\${index}, this.value)" title="בחר קול להקראה" class="px-2 py-1.5 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+                <option value="female" \${pVoice === 'male' ? '' : 'selected'}>👩 קול נשי</option>
+                <option value="male" \${pVoice === 'male' ? 'selected' : ''}>👨 קול גברי</option>
+              </select>\` : '';
+            
             return \`
             <div class="flex items-center justify-between bg-slate-800/70 border border-slate-700/60 px-4 py-3 rounded-2xl gap-3 shadow-sm hover:border-slate-600 transition">
               <div class="flex items-center gap-3 min-w-0">
@@ -5043,6 +5208,7 @@ mode: single
                 </div>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
+                \${voiceSelectHtml}
                 <button type="button" onclick="window.playPresetByIndex(\${index})" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow active:scale-95" title="הפעל">
                   <span>▶️</span>
                   <span>נגן</span>
@@ -5374,6 +5540,8 @@ function start() {
     console.log(` Database dir:      ${DB_DIR}`);
     console.log(`====================================================`);
   });
+
+  warmTtsCache(readTasks());
 }
 
 start();
