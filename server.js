@@ -1581,7 +1581,15 @@ app.post('/api/settings', (req, res) => {
     if (audio && typeof audio === 'object') {
       if (!data.settings.audio) data.settings.audio = {};
       if (Array.isArray(audio.presets)) {
-        data.settings.audio.presets = audio.presets.map((p, idx) => {
+        // Collect active audio identifiers currently used by any task
+        const activeUsedSounds = new Set();
+        (data.children || []).forEach(c => {
+          (c.tasks || []).forEach(t => {
+            if (t.audioFeedback) activeUsedSounds.add(t.audioFeedback);
+          });
+        });
+
+        const newPresets = audio.presets.map((p, idx) => {
           if (typeof p === 'object' && p !== null) {
             const val = String(p.value || p.name || '').trim();
             const type = (p.type === 'audio' || p.type === 'tts') ? p.type : (val.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts');
@@ -1602,6 +1610,28 @@ app.post('/api/settings', (req, res) => {
             };
           }
         }).filter(p => p.value);
+
+        // Retain any preset that is in use if client tried to remove it
+        const oldPresets = Array.isArray(data.settings.audio.presets) ? data.settings.audio.presets : [];
+        oldPresets.forEach(oldP => {
+          const oldVal = typeof oldP === 'object' ? (oldP.value || oldP.name) : oldP;
+          const oldName = typeof oldP === 'object' ? oldP.name : oldP;
+          const oldId = typeof oldP === 'object' ? oldP.id : null;
+          
+          if (activeUsedSounds.has(oldVal) || activeUsedSounds.has(oldName) || (oldId && activeUsedSounds.has(oldId))) {
+            const alreadyIn = newPresets.some(np => np.value === oldVal || np.name === oldName || (oldId && np.id === oldId));
+            if (!alreadyIn) {
+              newPresets.push(typeof oldP === 'object' ? oldP : {
+                id: 'retained_' + Date.now(),
+                type: String(oldVal).match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts',
+                name: oldVal,
+                value: oldVal
+              });
+            }
+          }
+        });
+
+        data.settings.audio.presets = newPresets;
       }
     }
     writeTasks(data);
@@ -3594,6 +3624,32 @@ mode: single
 
     async function removeTtsPreset(index) {
       if (!settingsData.audio || !Array.isArray(settingsData.audio.presets)) return;
+      const preset = settingsData.audio.presets[index];
+      if (!preset) return;
+      
+      const pVal = typeof preset === 'object' ? (preset.value || preset.name || preset.id) : preset;
+      const pName = typeof preset === 'object' ? (preset.name || preset.value) : preset;
+      const pId = typeof preset === 'object' ? preset.id : null;
+      
+      // Check if this preset is in use by any task
+      const usedBy = [];
+      if (appData && Array.isArray(appData.children)) {
+        appData.children.forEach(child => {
+          if (Array.isArray(child.tasks)) {
+            child.tasks.forEach(t => {
+              if (t.audioFeedback && (t.audioFeedback === pVal || t.audioFeedback === pName || (pId && t.audioFeedback === pId))) {
+                usedBy.push('"' + t.title + '" (' + child.name + ')');
+              }
+            });
+          }
+        });
+      }
+      
+      if (usedBy.length > 0) {
+        showToast('לא ניתן למחוק! הצליל בשימוש במשימות: ' + usedBy.slice(0, 3).join(', '), 'error');
+        return;
+      }
+      
       settingsData.audio.presets.splice(index, 1);
       await saveAudioPresets();
     }
@@ -4590,10 +4646,31 @@ mode: single
           : presets.map((preset, index) => {
             const isObj = typeof preset === 'object' && preset !== null;
             const pType = isObj ? preset.type : (preset.match(/\\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts');
+            const pVal = isObj ? (preset.value || preset.name) : preset;
             const pName = isObj ? (preset.name || preset.value) : preset;
             const icon = pType === 'audio' ? '🎵' : '🗣️';
             const badge = pType === 'audio' ? 'קובץ שמע' : 'הקראת טקסט (TTS)';
             const badgeClass = pType === 'audio' ? 'bg-purple-950/80 text-purple-300 border-purple-700/60' : 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60';
+            
+            // Check if this preset is in use by any task
+            let isUsed = false;
+            let usedCount = 0;
+            if (appData && Array.isArray(appData.children)) {
+              appData.children.forEach(child => {
+                if (Array.isArray(child.tasks)) {
+                  child.tasks.forEach(t => {
+                    if (t.audioFeedback && (t.audioFeedback === pVal || t.audioFeedback === pName || (isObj && preset.id && t.audioFeedback === preset.id))) {
+                      isUsed = true;
+                      usedCount++;
+                    }
+                  });
+                }
+              });
+            }
+            
+            const usedBadgeHtml = isUsed 
+              ? \`<span class="text-[11px] font-semibold px-2 py-0.5 rounded-md border bg-amber-950/70 text-amber-300 border-amber-700/60">בשימוש ב-${usedCount} משימות 🔒</span>\` 
+              : '';
             
             return \`
             <div class="flex items-center justify-between bg-slate-800/70 border border-slate-700/60 px-4 py-3 rounded-2xl gap-3 shadow-sm hover:border-slate-600 transition">
@@ -4601,9 +4678,12 @@ mode: single
                 <div class="w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-700/50 flex items-center justify-center text-xl flex-shrink-0">
                   \${icon}
                 </div>
-                <div class="flex flex-col min-w-0">
+                <div class="flex flex-col min-w-0 gap-1">
                   <span class="text-sm font-bold text-slate-100 truncate">\${pName}</span>
-                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md border w-max mt-0.5 \${badgeClass}">\${badge}</span>
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md border w-max \${badgeClass}">\${badge}</span>
+                    \${usedBadgeHtml}
+                  </div>
                 </div>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
@@ -4615,8 +4695,8 @@ mode: single
                   <span>⏹️</span>
                   <span>עצור</span>
                 </button>
-                <button type="button" onclick="removeTtsPreset(\${index})" class="p-1.5 bg-rose-950/60 hover:bg-rose-800 text-rose-300 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-rose-800/60 active:scale-95" title="מחק">
-                  <span>🗑️</span>
+                <button type="button" onclick="removeTtsPreset(\${index})" class="p-1.5 \${isUsed ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border-slate-700/50' : 'bg-rose-950/60 hover:bg-rose-800 text-rose-300 border-rose-800/60 active:scale-95'} rounded-xl text-xs font-bold transition flex items-center gap-1 border" title="\${isUsed ? 'צליל זה בשימוש במשימות פעילות - לא ניתן למחוק' : 'מחק'}">
+                  <span>\${isUsed ? '🔒' : '🗑️'}</span>
                 </button>
               </div>
             </div>
