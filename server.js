@@ -2050,35 +2050,36 @@ app.get('/', (req, res) => {
     /* Floating speaker indicator */
     #audio-playing-indicator {
       position: fixed;
-      bottom: 24px;
+      top: 50%;
       left: 50%;
-      transform: translateX(-50%);
+      transform: translate(-50%, -50%);
       z-index: 100;
-      background: rgba(79, 70, 229, 0.92);
+      background: rgba(79, 70, 229, 0.95);
       color: white;
-      padding: 10px 24px;
-      border-radius: 9999px;
-      font-size: 1rem;
-      font-weight: 700;
+      padding: 20px 40px;
+      border-radius: 2rem;
+      font-size: 1.4rem;
+      font-weight: 800;
       display: none;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
-      box-shadow: 0 8px 32px rgba(79, 70, 229, 0.4);
-      border: 1px solid rgba(255,255,255,0.15);
-      animation: indicatorBounce 1.5s ease-in-out infinite;
+      gap: 12px;
+      box-shadow: 0 12px 48px rgba(79, 70, 229, 0.5);
+      border: 2px solid rgba(255,255,255,0.2);
+      animation: indicatorPulse 1.5s ease-in-out infinite;
     }
     #audio-playing-indicator.visible { display: flex; }
-    @keyframes indicatorBounce {
-      0%, 100% { transform: translateX(-50%) translateY(0); }
-      50% { transform: translateX(-50%) translateY(-6px); }
+    @keyframes indicatorPulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(1.05); }
     }
     #audio-playing-indicator .speaker-icon {
-      font-size: 1.3rem;
+      font-size: 2.5rem;
       animation: speakerPulse 0.8s ease-in-out infinite alternate;
     }
     @keyframes speakerPulse {
       0% { transform: scale(1); }
-      100% { transform: scale(1.25); }
+      100% { transform: scale(1.3); }
     }
   </style>
 </head>
