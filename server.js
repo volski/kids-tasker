@@ -3824,9 +3824,28 @@ mode: single
                         >
                       </div>
 
-                      <div class="flex items-center gap-2">
-                        <button onclick="handleUpdateTask('\${child.id}', '\${task.id}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1" title="שמור שינוי כותרת ואייקון לקובץ">
-                          <span>שמור</span>
+                      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
+                        <select
+                          id="task-audio-\${child.id}-\${task.id}"
+                          onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
+                          class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[150px]"
+                          title="בחר צליל או הקראה למשימה זו"
+                        >
+                          \${getAudioOptionsHtml(task.audioFeedback || '')}
+                        </select>
+
+                        <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-800 transition select-none" title="האם משימה זו דורשת אישור הורה">
+                          <input 
+                            type="checkbox" 
+                            id="task-approval-\${child.id}-\${task.id}" 
+                            \${task.requiresApproval ? 'checked' : ''}
+                            onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
+                            class="w-4 h-4 rounded accent-indigo-600"
+                          >
+                          <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+                        </label>
+
+                        <button onclick="handleUpdateTask('\${child.id}', '\${task.id}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow" title="שמור">
                           <span>💾</span>
                         </button>
                         <span id="feedback-task-\${child.id}-\${task.id}" class="text-xs font-bold text-emerald-400 hidden">✓ נשמר!</span>
@@ -3834,7 +3853,6 @@ mode: single
                           🗑️
                         </button>
                       </div>
-                    </div>
                   \`;
                 }).join('')}
               </div>
