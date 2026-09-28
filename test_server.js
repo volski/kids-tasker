@@ -344,6 +344,60 @@ async function runTests() {
       throw new Error(`Expected allow_tv to be 'off' when chores are pending, got ${allowTvPending && allowTvPending.state}`);
     }
 
+    // 5c2. Test: Task requiring parent approval (child clicks -> pendingApproval: true, completed: false)
+    const updateTaskRes = await fetch(`http://localhost:${TEST_PORT}/api/children/child_1/tasks/t1`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requiresApproval: true, audioFeedback: 'tts_1' })
+    });
+    if (updateTaskRes.status !== 200) throw new Error('Failed to update task with requiresApproval');
+
+    const kidApprovalToggleRes = await fetch(`http://localhost:${TEST_PORT}/api/tasks/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ childId: 'child_1', taskId: 't1', isParent: false })
+    });
+    if (kidApprovalToggleRes.status !== 200) throw new Error('Failed to toggle approval task by kid');
+    const kidApprovalData = await kidApprovalToggleRes.json();
+    if (!kidApprovalData.pendingApproval || kidApprovalData.completed) {
+      throw new Error(`Expected pendingApproval: true and completed: false, got: ${JSON.stringify(kidApprovalData)}`);
+    }
+
+    await delay(300);
+    // Allow TV should remain OFF because approval is pending (not completed)
+    const allowTvPendingApproval = mockHass.getStats().postedEntities.get('binary_sensor.kids_tasks_allow_tv');
+    if (!allowTvPendingApproval || allowTvPendingApproval.state !== 'off') {
+      throw new Error(`Expected allow_tv to be 'off' while task pending approval, got ${allowTvPendingApproval && allowTvPendingApproval.state}`);
+    }
+    console.log('✓ Verified task requiring approval: child click sets pendingApproval (orange state) and DOES NOT complete task or unlock TV');
+
+    // Parent approves task via POST /api/tasks/approve
+    const approveRes = await fetch(`http://localhost:${TEST_PORT}/api/tasks/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ childId: 'child_1', taskId: 't1' })
+    });
+    if (approveRes.status !== 200) throw new Error('POST /api/tasks/approve failed');
+    const approveData = await approveRes.json();
+    if (!approveData.completed || approveData.pendingApproval) {
+      throw new Error(`Expected completed: true and pendingApproval: false after approval, got: ${JSON.stringify(approveData)}`);
+    }
+
+    await delay(300);
+    const allowTvAfterApproval = mockHass.getStats().postedEntities.get('binary_sensor.kids_tasks_allow_tv');
+    if (!allowTvAfterApproval || allowTvAfterApproval.state !== 'on') {
+      throw new Error(`Expected allow_tv to be 'on' after parent approves task, got ${allowTvAfterApproval && allowTvAfterApproval.state}`);
+    }
+    console.log('✓ Verified parent approval via POST /api/tasks/approve completes task and unlocks TV!');
+
+    // Revert t1 back to uncompleted for subsequent bypass tests
+    await fetch(`http://localhost:${TEST_PORT}/api/tasks/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ childId: 'child_1', taskId: 't1', isParent: true })
+    });
+    await delay(300);
+
     // 5d. Test: Parent TV Bypass in Home Assistant
     const bypassOnRes = await fetch(`http://localhost:${TEST_PORT}/api/hass/bypass`, {
       method: 'POST',
