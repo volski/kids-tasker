@@ -166,14 +166,36 @@ function normalizeTasksData(data) {
   } else {
     if (typeof data.settings.resetTime !== 'string') data.settings.resetTime = '06:00';
       if (!data.settings.audio || typeof data.settings.audio !== 'object') {
-        data.settings.audio = { presets: ['כל הכבוד!', 'יופי של עבודה!', 'אלוף!'] };
+        data.settings.audio = { presets: [] };
       }
       if (!Array.isArray(data.settings.audio.presets) || data.settings.audio.presets.length === 0) {
-        if (Array.isArray(data.settings.audio.ttsPresets) && data.settings.audio.ttsPresets.length > 0) {
-          data.settings.audio.presets = [...data.settings.audio.ttsPresets];
-        } else {
-          data.settings.audio.presets = ['כל הכבוד!', 'יופי של עבודה!', 'אלוף!'];
-        }
+        data.settings.audio.presets = [
+          { id: 'tts_1', type: 'tts', name: 'כל הכבוד!', value: 'כל הכבוד!' },
+          { id: 'tts_2', type: 'tts', name: 'יופי של עבודה!', value: 'יופי של עבודה!' },
+          { id: 'tts_3', type: 'tts', name: 'אלוף!', value: 'אלוף!' }
+        ];
+      } else {
+        data.settings.audio.presets = data.settings.audio.presets.map((p, idx) => {
+          if (typeof p === 'object' && p !== null) {
+            const val = String(p.value || p.name || '').trim();
+            const type = (p.type === 'audio' || p.type === 'tts') ? p.type : (val.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts');
+            return {
+              id: p.id || (type + '_' + idx),
+              type: type,
+              name: String(p.name || val).trim(),
+              value: val
+            };
+          } else {
+            const str = String(p).trim();
+            const type = str.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts';
+            return {
+              id: type + '_' + idx,
+              type: type,
+              name: str,
+              value: str
+            };
+          }
+        }).filter(p => p.value);
       }
     if (!data.settings.bypassSchedule || typeof data.settings.bypassSchedule !== 'object') {
       data.settings.bypassSchedule = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings.bypassSchedule));
@@ -1106,7 +1128,7 @@ app.post('/api/sounds/upload', express.json({limit: '20mb'}), (req, res) => {
 app.get('/api/sounds', (req, res) => {
   try {
     if (!fs.existsSync(SOUNDS_DIR)) return res.json({ sounds: [] });
-    const files = fs.readdirSync(SOUNDS_DIR).filter(f => f.match(/\.(mp3|wav|ogg)$/i));
+    const files = fs.readdirSync(SOUNDS_DIR).filter(f => f.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i));
     res.json({ sounds: files });
   } catch (err) {
     res.status(500).json({ error: 'Failed to read sounds directory' });
@@ -1559,7 +1581,27 @@ app.post('/api/settings', (req, res) => {
     if (audio && typeof audio === 'object') {
       if (!data.settings.audio) data.settings.audio = {};
       if (Array.isArray(audio.presets)) {
-        data.settings.audio.presets = audio.presets.map(s => String(s).trim()).filter(Boolean);
+        data.settings.audio.presets = audio.presets.map((p, idx) => {
+          if (typeof p === 'object' && p !== null) {
+            const val = String(p.value || p.name || '').trim();
+            const type = (p.type === 'audio' || p.type === 'tts') ? p.type : (val.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts');
+            return {
+              id: p.id || (type + '_' + Date.now() + '_' + idx),
+              type: type,
+              name: String(p.name || val).trim(),
+              value: val
+            };
+          } else {
+            const str = String(p).trim();
+            const type = str.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts';
+            return {
+              id: type + '_' + Date.now() + '_' + idx,
+              type: type,
+              name: str,
+              value: str
+            };
+          }
+        }).filter(p => p.value);
       }
     }
     writeTasks(data);
@@ -3481,13 +3523,12 @@ mode: single
         settingsData = d.settings;
         showToast('הגדרות צלילים נשמרו ✓');
         renderSettingsTab();
-        renderManageTab();
+        if (typeof renderManageTab === 'function') renderManageTab();
       } catch(e) {
         showToast('שגיאה: ' + e.message, 'error');
       }
     }
 
-    
     async function uploadAudioFile() {
       const fileInput = document.getElementById('settings-upload-audio');
       if (!fileInput.files || fileInput.files.length === 0) {
@@ -3507,12 +3548,20 @@ mode: single
           const data = await res.json();
           
           if (!settingsData.audio) settingsData.audio = {};
-          if (!settingsData.audio.presets) settingsData.audio.presets = [];
-          settingsData.audio.presets.push(data.file);
+          if (!Array.isArray(settingsData.audio.presets)) settingsData.audio.presets = [];
+          
+          const newPreset = {
+            id: 'audio_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            type: 'audio',
+            name: data.file,
+            value: data.file
+          };
+          
+          settingsData.audio.presets.push(newPreset);
           await saveAudioPresets();
           fileInput.value = '';
-          showToast('הקובץ הועלה בהצלחה!');
-          await loadSounds(); // Refresh window.availableSounds
+          showToast('קובץ השמע הועלה בהצלחה!');
+          if (typeof loadSounds === 'function') await loadSounds();
         } catch (err) {
           showToast('שגיאה בהעלאה: ' + err.message, 'error');
         }
@@ -3525,46 +3574,72 @@ mode: single
       const val = input.value.trim();
       if (!val) return;
       if (!settingsData.audio) settingsData.audio = {};
-      if (!settingsData.audio.presets) settingsData.audio.presets = [];
-      settingsData.audio.presets.push(val);
+      if (!Array.isArray(settingsData.audio.presets)) settingsData.audio.presets = [];
+      
+      const newPreset = {
+        id: 'tts_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        type: 'tts',
+        name: val,
+        value: val
+      };
+      
+      settingsData.audio.presets.push(newPreset);
       input.value = '';
       await saveAudioPresets();
     }
 
     async function removeTtsPreset(index) {
-      if (!settingsData.audio || !settingsData.audio.presets) return;
+      if (!settingsData.audio || !Array.isArray(settingsData.audio.presets)) return;
       settingsData.audio.presets.splice(index, 1);
       await saveAudioPresets();
     }
     
     window._currentAudio = null;
-    window.playSnd = function(txtOrFile, stopBtnEl = null) {
-      // Stop anything currently playing
-      if (window._currentAudio) {
-        window._currentAudio.pause();
-        window._currentAudio = null;
-      }
-      speechSynthesis.cancel();
+    window.playSnd = function(entry) {
+      window.stopSnd();
+      if (!entry) return;
       
-      // If no file given, this was just a stop command
-      if (!txtOrFile) return;
-
-      if (txtOrFile.match(/\.(mp3|wav|ogg)$/i)) {
-        window._currentAudio = new Audio('/sounds/' + txtOrFile);
+      let type = 'tts';
+      let val = '';
+      
+      if (typeof entry === 'object' && entry !== null) {
+        type = entry.type || (entry.value && entry.value.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts');
+        val = entry.value || entry.text || entry.name || '';
+      } else if (typeof entry === 'string') {
+        val = entry;
+        type = val.match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts';
+      }
+      
+      if (!val) return;
+      
+      if (type === 'audio') {
+        const soundUrl = (val.startsWith('/') || val.startsWith('http')) ? val : ('/sounds/' + encodeURIComponent(val));
+        window._currentAudio = new Audio(soundUrl);
         window._currentAudio.play().catch(e => console.warn('Audio play failed:', e));
       } else {
-        const u = new SpeechSynthesisUtterance(txtOrFile);
-        u.lang = 'he-IL';
-        speechSynthesis.speak(u);
+        if ('speechSynthesis' in window) {
+          const u = new SpeechSynthesisUtterance(val);
+          u.lang = 'he-IL';
+          speechSynthesis.speak(u);
+        }
       }
     };
     
+    window.playPresetByIndex = function(idx) {
+      const presets = (settingsData && settingsData.audio && Array.isArray(settingsData.audio.presets)) ? settingsData.audio.presets : [];
+      const item = presets[idx];
+      if (item) window.playSnd(item);
+    };
+
     window.stopSnd = function() {
       if (window._currentAudio) {
         window._currentAudio.pause();
+        window._currentAudio.currentTime = 0;
         window._currentAudio = null;
       }
-      speechSynthesis.cancel();
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
+      }
     };
     
   // --- TAB 2: Manage Children & Tasks ---
@@ -4380,28 +4455,42 @@ mode: single
       if (presetListEl) {
         const presets = (s.audio && Array.isArray(s.audio.presets)) ? s.audio.presets : [];
         presetListEl.innerHTML = presets.length === 0 
-          ? '<p class="text-xs text-slate-500 py-2">אין פריטים בספרייה. הוסף טקסט או העלה קובץ למטה.</p>'
-          : presets.map((preset, index) => \`
-            <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/50 px-4 py-3 rounded-xl gap-3">
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="text-base">\${preset.match(/\\.(mp3|wav|ogg)$/i) ? '🎵' : '🗣️'}</span>
-                <span class="text-sm font-semibold text-slate-100 truncate">\${preset}</span>
+          ? '<p class="text-xs text-slate-500 py-3 text-center">אין פריטים בספרייה. הוסף טקסט להקראה או העלה קובץ שמע למטה.</p>'
+          : presets.map((preset, index) => {
+            const isObj = typeof preset === 'object' && preset !== null;
+            const pType = isObj ? preset.type : (preset.match(/\\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i) ? 'audio' : 'tts');
+            const pName = isObj ? (preset.name || preset.value) : preset;
+            const icon = pType === 'audio' ? '🎵' : '🗣️';
+            const badge = pType === 'audio' ? 'קובץ שמע' : 'הקראת טקסט (TTS)';
+            const badgeClass = pType === 'audio' ? 'bg-purple-950/80 text-purple-300 border-purple-700/60' : 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60';
+            
+            return \`
+            <div class="flex items-center justify-between bg-slate-800/70 border border-slate-700/60 px-4 py-3 rounded-2xl gap-3 shadow-sm hover:border-slate-600 transition">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-700/50 flex items-center justify-center text-xl flex-shrink-0">
+                  \${icon}
+                </div>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-sm font-bold text-slate-100 truncate">\${pName}</span>
+                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md border w-max mt-0.5 \${badgeClass}">\${badge}</span>
+                </div>
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
-                <button type="button" onclick="window.playSnd('\${preset.replace(/'/g, "\\\\\\'")}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow" title="הפעל">
+                <button type="button" onclick="window.playPresetByIndex(\${index})" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow active:scale-95" title="הפעל">
                   <span>▶️</span>
                   <span>נגן</span>
                 </button>
-                <button type="button" onclick="window.stopSnd()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-amber-300 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow" title="עצור">
+                <button type="button" onclick="window.stopSnd()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow active:scale-95" title="עצור">
                   <span>⏹️</span>
                   <span>עצור</span>
                 </button>
-                <button type="button" onclick="removeTtsPreset(\${index})" class="px-2.5 py-1.5 bg-rose-900/60 hover:bg-rose-700 text-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1 border border-rose-700/50" title="מחק">
+                <button type="button" onclick="removeTtsPreset(\${index})" class="p-1.5 bg-rose-950/60 hover:bg-rose-800 text-rose-300 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-rose-800/60 active:scale-95" title="מחק">
                   <span>🗑️</span>
                 </button>
               </div>
             </div>
-          \`).join('');
+            \`;
+          }).join('');
       }
       // Reset time
       const resetEnabled = s.resetTime && s.resetTime.trim() !== '';
