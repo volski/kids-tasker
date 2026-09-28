@@ -37,6 +37,12 @@ const ICONS_DIR = path.join(__dirname, 'icons');
 // Serve icons directory statically
 app.use('/icons', express.static(ICONS_DIR));
 const SOUNDS_DIR = path.join(__dirname, 'sounds');
+if (!fs.existsSync(SOUNDS_DIR)) {
+  fs.mkdirSync(SOUNDS_DIR, { recursive: true });
+}
+if (!fs.existsSync(DB_DIR)) {
+  fs.mkdirSync(DB_DIR, { recursive: true });
+}
 app.use('/sounds', express.static(SOUNDS_DIR));
 
 // Helper for local YYYY-MM-DD
