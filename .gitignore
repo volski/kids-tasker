@@ -1,9 +1,18 @@
 # Dependencies
 node_modules/
 
-# Runtime and local configuration with sensitive keys
+# Runtime and local database files (preserves live instance data on server)
+db/*.json
+!db/*.example.json
 tasks.json
 tasks.test.json
+test_db/
+
+# Uploaded sound files
+sounds/*
+!sounds/.gitkeep
+
+# Environment and local configuration with sensitive keys
 .env
 *.env
 
