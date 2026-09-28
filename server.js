@@ -2193,11 +2193,23 @@ app.get('/', (req, res) => {
       }
     }
 
+    const pendingAudioPlayCounts = {};
+
     function renderBoard(data) {
       currentData = data;
       loadingElem.classList.add('hidden');
       boardElem.classList.remove('hidden');
       updateTvBadge(data);
+
+      if (data && Array.isArray(data.children)) {
+        data.children.forEach(c => {
+          (c.tasks || []).forEach(t => {
+            if (t.completed || !t.pendingApproval) {
+              delete pendingAudioPlayCounts[c.id + '_' + t.id];
+            }
+          });
+        });
+      }
 
       if (!data || !data.children || data.children.length === 0) {
         boardElem.innerHTML = \`
@@ -2404,6 +2416,8 @@ app.get('/', (req, res) => {
         return;
       }
 
+      const toggleKey = childId + '_' + taskId;
+
       if (currentData) {
         const child = currentData.children.find(c => c.id === childId);
         if (child) {
@@ -2415,9 +2429,12 @@ app.get('/', (req, res) => {
             }
             if (task.pendingApproval) {
               showToast('המשימה כבר נשלחה וממתינה לאישור הורה ⏳');
-              if (task.audioFeedback) {
-                // Play sound again on orange pending task (and locks until finished)
-                playTaskAudio(task.audioFeedback);
+              const currentCount = pendingAudioPlayCounts[toggleKey] || 1;
+              if (currentCount < 3) {
+                pendingAudioPlayCounts[toggleKey] = currentCount + 1;
+                if (task.audioFeedback) {
+                  playTaskAudio(task.audioFeedback);
+                }
               }
               return;
             }
@@ -2425,7 +2442,6 @@ app.get('/', (req, res) => {
         }
       }
 
-      const toggleKey = \`\${childId}_\${taskId}\`;
       if (pendingToggles.has(toggleKey)) return;
       pendingToggles.add(toggleKey);
 
@@ -2439,6 +2455,7 @@ app.get('/', (req, res) => {
             if (task.requiresApproval) {
               task.pendingApproval = true;
               task.completed = false;
+              pendingAudioPlayCounts[toggleKey] = 1; // 1st play for this pending task
             } else {
               task.completed = true;
               task.completedAt = new Date().toISOString();
