@@ -1087,7 +1087,8 @@ function startHassPolling() {
 }
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // API Endpoint: Available Icons list
 app.post('/api/sounds/upload', express.json({limit: '20mb'}), (req, res) => {
@@ -1554,6 +1555,12 @@ app.post('/api/settings', (req, res) => {
         };
       }
       data.settings.bypassSchedule = newBs;
+    }
+    if (audio && typeof audio === 'object') {
+      if (!data.settings.audio) data.settings.audio = {};
+      if (Array.isArray(audio.presets)) {
+        data.settings.audio.presets = audio.presets.map(s => String(s).trim()).filter(Boolean);
+      }
     }
     writeTasks(data);
     res.json({ success: true, settings: data.settings });
