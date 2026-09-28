@@ -3647,14 +3647,26 @@ mode: single
     };
     
   function getAudioOptionsHtml(selectedVal = '') {
-      const presets = (settingsData && settingsData.audio && Array.isArray(settingsData.audio.presets)) 
-        ? settingsData.audio.presets 
-        : [];
+      let presets = [];
+      if (settingsData && settingsData.audio && Array.isArray(settingsData.audio.presets) && settingsData.audio.presets.length > 0) {
+        presets = settingsData.audio.presets;
+      } else if (appData && appData.settings && appData.settings.audio && Array.isArray(appData.settings.audio.presets) && appData.settings.audio.presets.length > 0) {
+        presets = appData.settings.audio.presets;
+      } else {
+        presets = [
+          { id: 'tts_1', type: 'tts', name: 'כל הכבוד!', value: 'כל הכבוד!' },
+          { id: 'tts_2', type: 'tts', name: 'יופי של עבודה!', value: 'יופי של עבודה!' },
+          { id: 'tts_3', type: 'tts', name: 'אלוף!', value: 'אלוף!' }
+        ];
+      }
       
       let html = '<option value="">(ללא צליל)</option>';
       
       const ttsItems = presets.filter(p => (typeof p === 'object' ? p.type === 'tts' : !String(p).match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i)));
       const audioItems = presets.filter(p => (typeof p === 'object' ? p.type === 'audio' : String(p).match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i)));
+      
+      const existingAudioVals = new Set(audioItems.map(p => (typeof p === 'object' ? p.value : p)));
+      const extraSounds = (window.availableSounds || []).filter(s => !existingAudioVals.has(s));
       
       if (ttsItems.length > 0) {
         html += '<optgroup label="🗣️ הודעות הקראה (TTS)">';
@@ -3662,18 +3674,22 @@ mode: single
           const val = typeof item === 'object' ? item.value : item;
           const label = typeof item === 'object' ? (item.name || item.value) : item;
           const isSel = (val === selectedVal) ? 'selected' : '';
-          html += '<option value="' + val.replace(/"/g, '&quot;') + '" ' + isSel + '>🗣️ ' + label + '</option>';
+          html += '<option value="' + String(val).replace(/"/g, '&quot;') + '" ' + isSel + '>🗣️ ' + label + '</option>';
         });
         html += '</optgroup>';
       }
       
-      if (audioItems.length > 0) {
+      if (audioItems.length > 0 || extraSounds.length > 0) {
         html += '<optgroup label="🎵 קבצי שמע">';
         audioItems.forEach(item => {
           const val = typeof item === 'object' ? item.value : item;
           const label = typeof item === 'object' ? (item.name || item.value) : item;
           const isSel = (val === selectedVal) ? 'selected' : '';
-          html += '<option value="' + val.replace(/"/g, '&quot;') + '" ' + isSel + '>🎵 ' + label + '</option>';
+          html += '<option value="' + String(val).replace(/"/g, '&quot;') + '" ' + isSel + '>🎵 ' + label + '</option>';
+        });
+        extraSounds.forEach(snd => {
+          const isSel = (snd === selectedVal) ? 'selected' : '';
+          html += '<option value="' + String(snd).replace(/"/g, '&quot;') + '" ' + isSel + '>🎵 ' + snd + '</option>';
         });
         html += '</optgroup>';
       }
@@ -3735,50 +3751,65 @@ mode: single
               </div>
             </div>
 
-            <form onsubmit="handleAddTask(event, '\${child.id}')" class="flex flex-wrap gap-2.5 items-center">
-              <input 
-                type="text" 
-                id="new-task-title-\${child.id}" 
-                placeholder="הוסף משימה חדשה עבור \${child.name}..." 
-                required
-                class="flex-1 min-w-[180px] px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
+            <!-- Add Task Form with clean responsive layout -->
+            <form onsubmit="handleAddTask(event, '\${child.id}')" class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-3">
+              <div class="flex items-center gap-2 text-xs font-bold text-slate-400">
+                <span>➕</span>
+                <span>הוספת משימה חדשה</span>
+              </div>
               
-              <select 
-                id="new-task-icon-\${child.id}" 
-                class="px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                title="בחר אייקון"
-              >
-                \${iconOptionsHtml}
-              </select>
+              <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                <div class="md:col-span-5 flex items-center gap-2">
+                  <select 
+                    id="new-task-icon-\${child.id}" 
+                    class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-shrink-0"
+                    title="בחר אייקון"
+                  >
+                    \${iconOptionsHtml}
+                  </select>
+                  <input 
+                    type="text" 
+                    id="new-task-title-\${child.id}" 
+                    placeholder="שם המשימה (למשל: סידור חדר)..." 
+                    required
+                    class="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                </div>
 
-              <select 
-                id="new-task-audio-\${child.id}" 
-                class="px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 max-w-[170px]"
-                title="בחר צליל או הקראה למשימה"
-              >
-                \${getAudioOptionsHtml('')}
-              </select>
+                <div class="md:col-span-4">
+                  <select 
+                    id="new-task-audio-\${child.id}" 
+                    class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    title="בחר צליל או הקראה למשימה"
+                  >
+                    \${getAudioOptionsHtml('')}
+                  </select>
+                </div>
 
-              <label class="flex items-center gap-1.5 px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-900 transition select-none" title="האם משימה זו דורשת אישור הורה">
-                <input type="checkbox" id="new-task-approval-\${child.id}" class="w-4 h-4 rounded accent-indigo-600">
-                <span class="text-xs font-bold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
-              </label>
+                <div class="md:col-span-3 flex items-center justify-between md:justify-end gap-2.5">
+                  <label class="flex items-center gap-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו דורשת אישור הורה">
+                    <input type="checkbox" id="new-task-approval-\${child.id}" class="w-4 h-4 rounded accent-indigo-600">
+                    <span class="text-xs font-bold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+                  </label>
 
-              <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-md transition whitespace-nowrap">
-                + הוסף משימה
-              </button>
+                  <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md transition whitespace-nowrap flex items-center gap-1 flex-shrink-0">
+                    <span>+</span>
+                    <span>הוסף</span>
+                  </button>
+                </div>
+              </div>
             </form>
 
+            <!-- Task List -->
             <div class="space-y-2.5">
               <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">רשימת משימות <span class="text-slate-600 font-normal normal-case">(גרור לשינוי סדר)</span></h4>
               <div
-                class="task-sortable-list space-y-2"
+                class="task-sortable-list space-y-2.5"
                 data-child-id="\${child.id}"
                 ondragover="event.preventDefault()"
                 ondrop="handleTaskDrop(event, '\${child.id}')"
               >
-                \${child.tasks.length === 0 ? '<p class="text-sm text-slate-500 py-2">אין משימות עדיין</p>' : child.tasks.map(task => {
+                \${child.tasks.length === 0 ? '<p class="text-sm text-slate-500 py-3 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60">אין משימות עדיין. הוסף משימה חדשה למעלה.</p>' : child.tasks.map(task => {
                   const currentIcon = task.icon || 'star';
                   const isNone = currentIcon === 'none';
                   const taskIconOptions = '<option value="none"' + (isNone ? ' selected' : '') + '>⬜ ללא אייקון</option>' +
@@ -3789,7 +3820,7 @@ mode: single
 
                   return \`
                     <div
-                      class="task-drag-row flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 p-3 bg-slate-950/60 border border-slate-800/90 rounded-2xl cursor-grab active:cursor-grabbing transition-colors"
+                      class="task-drag-row bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5 transition-all hover:border-slate-700 space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4 cursor-grab active:cursor-grabbing"
                       draggable="true"
                       data-task-id="\${task.id}"
                       data-child-id="\${child.id}"
@@ -3797,17 +3828,18 @@ mode: single
                       ondragend="handleTaskDragEnd(event)"
                       ondragover="event.preventDefault(); handleTaskDragOver(event)"
                     >
-                      <span class="text-slate-600 hover:text-slate-400 select-none flex-shrink-0 cursor-grab text-lg leading-none" title="גרור לשינוי סדר">⠿</span>
+                      <!-- Part 1: Drag handle + Icon Preview + Icon Select + Title Input -->
+                      <div class="flex items-center gap-3 flex-1 min-w-0">
+                        <span class="text-slate-600 hover:text-slate-400 select-none flex-shrink-0 cursor-grab text-lg leading-none" title="גרור לשינוי סדר">⠿</span>
 
-                      <div class="flex items-center gap-3 flex-1 min-w-[200px]">
-                        <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-inner">
                           \${iconPreviewHtml}
                         </div>
 
                         <select
                           id="task-icon-\${child.id}-\${task.id}"
                           onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
-                          class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-shrink-0"
                           title="שנה אייקון"
                         >
                           \${taskIconOptions}
@@ -3819,40 +3851,46 @@ mode: single
                           value="\${task.title}"
                           onblur="handleUpdateTask('\${child.id}', '\${task.id}', true)"
                           onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleUpdateTask('\${child.id}', '\${task.id}'); }"
-                          class="bg-transparent border-b border-slate-700 focus:border-indigo-500 text-white font-bold text-sm px-2 py-1 flex-1 focus:bg-slate-900 rounded focus:outline-none transition"
-                          title="לחץ Enter או לחץ מחוץ לתיבה לשמירה אוטומטית לקובץ"
+                          class="bg-slate-900/60 border border-slate-800 focus:border-indigo-500 text-white font-bold text-sm px-3 py-1.5 rounded-xl flex-1 focus:outline-none transition min-w-[120px]"
+                          title="לחץ Enter או לחץ מחוץ לתיבה לשמירה אוטומטית"
                         >
                       </div>
 
-                      <div class="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-                        <select
-                          id="task-audio-\${child.id}-\${task.id}"
-                          onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
-                          class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 max-w-[150px]"
-                          title="בחר צליל או הקראה למשימה זו"
-                        >
-                          \${getAudioOptionsHtml(task.audioFeedback || '')}
-                        </select>
-
-                        <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-800 transition select-none" title="האם משימה זו דורשת אישור הורה">
-                          <input 
-                            type="checkbox" 
-                            id="task-approval-\${child.id}-\${task.id}" 
-                            \${task.requiresApproval ? 'checked' : ''}
+                      <!-- Part 2: Audio dropdown + Approval toggle + Actions -->
+                      <div class="flex items-center justify-between md:justify-end gap-2.5 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800/80 flex-shrink-0">
+                        <div class="flex items-center gap-2">
+                          <select
+                            id="task-audio-\${child.id}-\${task.id}"
                             onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
-                            class="w-4 h-4 rounded accent-indigo-600"
+                            class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36 sm:w-44"
+                            title="בחר צליל או הקראה למשימה זו"
                           >
-                          <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
-                        </label>
+                            \${getAudioOptionsHtml(task.audioFeedback || '')}
+                          </select>
 
-                        <button onclick="handleUpdateTask('\${child.id}', '\${task.id}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow" title="שמור">
-                          <span>💾</span>
-                        </button>
-                        <span id="feedback-task-\${child.id}-\${task.id}" class="text-xs font-bold text-emerald-400 hidden">✓ נשמר!</span>
-                        <button onclick="handleDeleteTask('\${child.id}', '\${task.id}', '\${task.title}')" class="p-2 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-bold transition" title="מחק משימה">
-                          🗑️
-                        </button>
+                          <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו דורשת אישור הורה">
+                            <input 
+                              type="checkbox" 
+                              id="task-approval-\${child.id}-\${task.id}" 
+                              \${task.requiresApproval ? 'checked' : ''}
+                              onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
+                              class="w-4 h-4 rounded accent-indigo-600"
+                            >
+                            <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+                          </label>
+                        </div>
+
+                        <div class="flex items-center gap-1.5">
+                          <button onclick="handleUpdateTask('\${child.id}', '\${task.id}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow active:scale-95" title="שמור">
+                            <span>💾</span>
+                          </button>
+                          <span id="feedback-task-\${child.id}-\${task.id}" class="text-xs font-bold text-emerald-400 hidden">✓</span>
+                          <button onclick="handleDeleteTask('\${child.id}', '\${task.id}', '\${task.title}')" class="p-1.5 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-bold transition active:scale-95" title="מחק משימה">
+                            🗑️
+                          </button>
+                        </div>
                       </div>
+                    </div>
                   \`;
                 }).join('')}
               </div>
