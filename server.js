@@ -2381,13 +2381,17 @@ app.get('/', (req, res) => {
 
       try {
         if (type === 'audio') {
-          const audio = new Audio(value);
+          const soundUrl = (value.startsWith('/') || value.startsWith('http')) ? value : ('/sounds/' + encodeURIComponent(value));
+          const audio = new Audio(soundUrl);
           audio.addEventListener('ended', doneCallback, { once: true });
-          audio.addEventListener('error', doneCallback, { once: true });
+          audio.addEventListener('error', (err) => {
+            console.warn('Audio play error for URL ' + soundUrl, err);
+            doneCallback();
+          }, { once: true });
           const playPromise = audio.play();
           if (playPromise !== undefined) {
             playPromise.catch(err => {
-              console.warn('Audio play failed:', err);
+              console.warn('Audio play failed for URL ' + soundUrl, err);
               doneCallback();
             });
           }
