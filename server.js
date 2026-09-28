@@ -4669,7 +4669,7 @@ mode: single
             }
             
             const usedBadgeHtml = isUsed 
-              ? \`<span class="text-[11px] font-semibold px-2 py-0.5 rounded-md border bg-amber-950/70 text-amber-300 border-amber-700/60">בשימוש ב-${usedCount} משימות 🔒</span>\` 
+              ? \`<span class="text-[11px] font-semibold px-2 py-0.5 rounded-md border bg-amber-950/70 text-amber-300 border-amber-700/60">בשימוש ב-\${usedCount} משימות 🔒</span>\` 
               : '';
             
             return \`
