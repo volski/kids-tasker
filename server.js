@@ -168,8 +168,12 @@ function normalizeTasksData(data) {
       if (!data.settings.audio || typeof data.settings.audio !== 'object') {
         data.settings.audio = { presets: ['כל הכבוד!', 'יופי של עבודה!', 'אלוף!'] };
       }
-      if (!Array.isArray(data.settings.audio.presets)) {
-        data.settings.audio.presets = [];
+      if (!Array.isArray(data.settings.audio.presets) || data.settings.audio.presets.length === 0) {
+        if (Array.isArray(data.settings.audio.ttsPresets) && data.settings.audio.ttsPresets.length > 0) {
+          data.settings.audio.presets = [...data.settings.audio.ttsPresets];
+        } else {
+          data.settings.audio.presets = ['כל הכבוד!', 'יופי של עבודה!', 'אלוף!'];
+        }
       }
     if (!data.settings.bypassSchedule || typeof data.settings.bypassSchedule !== 'object') {
       data.settings.bypassSchedule = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings.bypassSchedule));
@@ -4367,16 +4371,27 @@ mode: single
       
       const presetListEl = document.getElementById('settings-tts-presets-list');
       if (presetListEl) {
-        const presets = (s.audio && s.audio.presets) ? s.audio.presets : [];
+        const presets = (s.audio && Array.isArray(s.audio.presets)) ? s.audio.presets : [];
         presetListEl.innerHTML = presets.length === 0 
-          ? '<p class="text-xs text-slate-500">אין פריטים בספרייה. הוסף מטה.</p>'
+          ? '<p class="text-xs text-slate-500 py-2">אין פריטים בספרייה. הוסף טקסט או העלה קובץ למטה.</p>'
           : presets.map((preset, index) => \`
-            <div class="flex items-center justify-between bg-slate-800/50 px-3 py-2 rounded-lg">
-              <span class="text-sm text-slate-200">\${preset}</span>
-              <div class="flex items-center gap-3">
-                <button type="button" onclick="window.playSnd('\${preset.replace(/'/g, "\\\\\\'")}')" class="text-indigo-400 hover:text-indigo-300" title="נגן">▶️</button>
-                <button type="button" onclick="window.stopSnd()" class="text-amber-400 hover:text-amber-300" title="עצור">⏹️</button>
-                <button type="button" onclick="removeTtsPreset(\${index})" class="text-xs text-rose-400 hover:text-rose-300 font-bold">מחק</button>
+            <div class="flex items-center justify-between bg-slate-800/60 border border-slate-700/50 px-4 py-3 rounded-xl gap-3">
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-base">\${preset.match(/\\.(mp3|wav|ogg)$/i) ? '🎵' : '🗣️'}</span>
+                <span class="text-sm font-semibold text-slate-100 truncate">\${preset}</span>
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <button type="button" onclick="window.playSnd('\${preset.replace(/'/g, "\\\\\\'")}')" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow" title="הפעל">
+                  <span>▶️</span>
+                  <span>נגן</span>
+                </button>
+                <button type="button" onclick="window.stopSnd()" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-amber-300 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow" title="עצור">
+                  <span>⏹️</span>
+                  <span>עצור</span>
+                </button>
+                <button type="button" onclick="removeTtsPreset(\${index})" class="px-2.5 py-1.5 bg-rose-900/60 hover:bg-rose-700 text-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1 border border-rose-700/50" title="מחק">
+                  <span>🗑️</span>
+                </button>
               </div>
             </div>
           \`).join('');

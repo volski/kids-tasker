@@ -1,0 +1,59 @@
+{
+  "resetTime": "06:00",
+  "audio": {
+    "onComplete": "כל הכבוד!",
+    "onPending": "נשלח לאישור",
+    "ttsPresets": [
+      "כל הכבוד!",
+      "יופי של עבודה!",
+      "אלוף!",
+      "בדיקה"
+    ],
+    "presets": [
+      "כל הכבוד!",
+      "יופי של עבודה!",
+      "אלוף!",
+      "בדיקה"
+    ]
+  },
+  "bypassSchedule": {
+    "enabled": false,
+    "schedule": {
+      "0": {
+        "enabled": false,
+        "startTime": "15:00",
+        "endTime": "21:00"
+      },
+      "1": {
+        "enabled": true,
+        "startTime": "15:00",
+        "endTime": "21:00"
+      },
+      "2": {
+        "enabled": true,
+        "startTime": "15:00",
+        "endTime": "21:00"
+      },
+      "3": {
+        "enabled": true,
+        "startTime": "15:00",
+        "endTime": "21:00"
+      },
+      "4": {
+        "enabled": true,
+        "startTime": "15:00",
+        "endTime": "21:00"
+      },
+      "5": {
+        "enabled": true,
+        "startTime": "13:00",
+        "endTime": "22:00"
+      },
+      "6": {
+        "enabled": false,
+        "startTime": "10:00",
+        "endTime": "22:00"
+      }
+    }
+  }
+}
