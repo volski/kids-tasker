@@ -2008,10 +2008,77 @@ app.get('/', (req, res) => {
       user-select: none;
     }
     .task-card {
-      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
+      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease, opacity 0.3s ease;
     }
     .task-card:active {
       transform: scale(0.97);
+    }
+
+    /* Audio playing state: dim task cards and show pulsing effect */
+    .audio-playing .task-card {
+      opacity: 0.55;
+    }
+    .audio-playing .task-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: rgba(0, 0, 0, 0.15);
+      animation: audioOverlayPulse 1.2s ease-in-out infinite;
+    }
+    .task-card { position: relative; overflow: hidden; }
+
+    @keyframes audioOverlayPulse {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+
+    /* Shake animation for blocked clicks */
+    @keyframes taskShake {
+      0%, 100% { transform: translateX(0); }
+      15% { transform: translateX(-6px); }
+      30% { transform: translateX(6px); }
+      45% { transform: translateX(-4px); }
+      60% { transform: translateX(4px); }
+      75% { transform: translateX(-2px); }
+    }
+    .task-shake {
+      animation: taskShake 0.4s ease !important;
+      opacity: 0.7 !important;
+    }
+
+    /* Floating speaker indicator */
+    #audio-playing-indicator {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      background: rgba(79, 70, 229, 0.92);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 9999px;
+      font-size: 1rem;
+      font-weight: 700;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 8px 32px rgba(79, 70, 229, 0.4);
+      border: 1px solid rgba(255,255,255,0.15);
+      animation: indicatorBounce 1.5s ease-in-out infinite;
+    }
+    #audio-playing-indicator.visible { display: flex; }
+    @keyframes indicatorBounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(-6px); }
+    }
+    #audio-playing-indicator .speaker-icon {
+      font-size: 1.3rem;
+      animation: speakerPulse 0.8s ease-in-out infinite alternate;
+    }
+    @keyframes speakerPulse {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.25); }
     }
   </style>
 </head>
@@ -2068,6 +2135,12 @@ app.get('/', (req, res) => {
 
   <!-- Tablet Toast Notification -->
   <div id="tablet-toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl bg-slate-900/95 border border-slate-700 text-white font-bold text-sm shadow-2xl transition-all duration-300 pointer-events-none opacity-0 z-50"></div>
+
+  <!-- Audio Playing Indicator -->
+  <div id="audio-playing-indicator">
+    <span class="speaker-icon">🔊</span>
+    <span>מנגן...</span>
+  </div>
 
   <!-- Footer Info -->
   <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-900">
@@ -2371,11 +2444,17 @@ app.get('/', (req, res) => {
       }
 
       isTaskAudioPlaying = true;
+      boardElem.classList.add('audio-playing');
+      var audioIndicator = document.getElementById('audio-playing-indicator');
+      if (audioIndicator) audioIndicator.classList.add('visible');
       let finished = false;
       const finish = () => {
         if (finished) return;
         finished = true;
         isTaskAudioPlaying = false;
+        boardElem.classList.remove('audio-playing');
+        var audioInd = document.getElementById('audio-playing-indicator');
+        if (audioInd) audioInd.classList.remove('visible');
         if (onDone) onDone();
       };
 
@@ -2421,8 +2500,15 @@ app.get('/', (req, res) => {
     }
 
     async function toggleTask(childId, taskId) {
-      // 1. If audio is currently playing, block any additional clicks until it finishes!
+      // 1. If audio is currently playing, shake the clicked card to show it's blocked
       if (isTaskAudioPlaying) {
+        var clickedCard = document.querySelector('[data-child-id="' + childId + '"][data-task-id="' + taskId + '"]');
+        if (clickedCard) {
+          clickedCard.classList.remove('task-shake');
+          void clickedCard.offsetWidth; // force reflow to restart animation
+          clickedCard.classList.add('task-shake');
+          setTimeout(function() { clickedCard.classList.remove('task-shake'); }, 450);
+        }
         return;
       }
 
