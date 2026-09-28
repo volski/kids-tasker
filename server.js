@@ -1733,7 +1733,9 @@ app.post('/api/children/:id/tasks', (req, res) => {
       title: title.trim(),
       completed: false,
       completedAt: null,
-      icon: assignedIcon
+      icon: assignedIcon,
+      requiresApproval: Boolean(req.body.requiresApproval),
+      audioFeedback: typeof req.body.audioFeedback === 'string' ? req.body.audioFeedback.trim() : ''
     };
 
     child.tasks.push(newTask);
@@ -1752,8 +1754,8 @@ app.put('/api/children/:id/tasks/:taskId', (req, res) => {
   const { id, taskId } = req.params;
   const { title, icon } = req.body;
 
-  if (!title && !icon) {
-    return res.status(400).json({ error: 'title or icon is required to update task' });
+  if (!title && !icon && req.body.requiresApproval === undefined && req.body.audioFeedback === undefined) {
+    return res.status(400).json({ error: 'At least one field is required to update task' });
   }
 
   try {
@@ -1770,6 +1772,8 @@ app.put('/api/children/:id/tasks/:taskId', (req, res) => {
 
     if (title && typeof title === 'string') task.title = title.trim();
     if (icon && typeof icon === 'string') task.icon = icon.trim();
+    if (req.body.requiresApproval !== undefined) task.requiresApproval = Boolean(req.body.requiresApproval);
+    if (req.body.audioFeedback !== undefined) task.audioFeedback = String(req.body.audioFeedback).trim();
 
     writeTasks(data);
     io.emit('task_updated', data);
@@ -3642,6 +3646,41 @@ mode: single
       }
     };
     
+  function getAudioOptionsHtml(selectedVal = '') {
+      const presets = (settingsData && settingsData.audio && Array.isArray(settingsData.audio.presets)) 
+        ? settingsData.audio.presets 
+        : [];
+      
+      let html = '<option value="">(ללא צליל)</option>';
+      
+      const ttsItems = presets.filter(p => (typeof p === 'object' ? p.type === 'tts' : !String(p).match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i)));
+      const audioItems = presets.filter(p => (typeof p === 'object' ? p.type === 'audio' : String(p).match(/\.(mp3|wav|ogg|m4a|aac|mp4|webm|flac)$/i)));
+      
+      if (ttsItems.length > 0) {
+        html += '<optgroup label="🗣️ הודעות הקראה (TTS)">';
+        ttsItems.forEach(item => {
+          const val = typeof item === 'object' ? item.value : item;
+          const label = typeof item === 'object' ? (item.name || item.value) : item;
+          const isSel = (val === selectedVal) ? 'selected' : '';
+          html += '<option value="' + val.replace(/"/g, '&quot;') + '" ' + isSel + '>🗣️ ' + label + '</option>';
+        });
+        html += '</optgroup>';
+      }
+      
+      if (audioItems.length > 0) {
+        html += '<optgroup label="🎵 קבצי שמע">';
+        audioItems.forEach(item => {
+          const val = typeof item === 'object' ? item.value : item;
+          const label = typeof item === 'object' ? (item.name || item.value) : item;
+          const isSel = (val === selectedVal) ? 'selected' : '';
+          html += '<option value="' + val.replace(/"/g, '&quot;') + '" ' + isSel + '>🎵 ' + label + '</option>';
+        });
+        html += '</optgroup>';
+      }
+      
+      return html;
+    }
+
   // --- TAB 2: Manage Children & Tasks ---
     function renderManageTab() {
       const container = document.getElementById('children-manage-container');
@@ -3696,21 +3735,35 @@ mode: single
               </div>
             </div>
 
-            <form onsubmit="handleAddTask(event, '\${child.id}')" class="flex flex-wrap gap-2.5">
+            <form onsubmit="handleAddTask(event, '\${child.id}')" class="flex flex-wrap gap-2.5 items-center">
               <input 
                 type="text" 
                 id="new-task-title-\${child.id}" 
                 placeholder="הוסף משימה חדשה עבור \${child.name}..." 
                 required
-                class="flex-1 min-w-[200px] px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                class="flex-1 min-w-[180px] px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
               
               <select 
                 id="new-task-icon-\${child.id}" 
                 class="px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                title="בחר אייקון"
               >
                 \${iconOptionsHtml}
               </select>
+
+              <select 
+                id="new-task-audio-\${child.id}" 
+                class="px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 max-w-[170px]"
+                title="בחר צליל או הקראה למשימה"
+              >
+                \${getAudioOptionsHtml('')}
+              </select>
+
+              <label class="flex items-center gap-1.5 px-3 py-2.5 bg-slate-950 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-900 transition select-none" title="האם משימה זו דורשת אישור הורה">
+                <input type="checkbox" id="new-task-approval-\${child.id}" class="w-4 h-4 rounded accent-indigo-600">
+                <span class="text-xs font-bold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+              </label>
 
               <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-md transition whitespace-nowrap">
                 + הוסף משימה
@@ -4279,18 +4332,26 @@ mode: single
       e.preventDefault();
       const titleInput = document.getElementById(\`new-task-title-\${childId}\`);
       const iconInput = document.getElementById(\`new-task-icon-\${childId}\`);
-      const title = titleInput.value.trim();
+      const audioInput = document.getElementById(\`new-task-audio-\${childId}\`);
+      const approvalInput = document.getElementById(\`new-task-approval-\${childId}\`);
+      
+      const title = titleInput ? titleInput.value.trim() : '';
       const icon = iconInput ? iconInput.value : 'star';
+      const audioFeedback = audioInput ? audioInput.value.trim() : '';
+      const requiresApproval = approvalInput ? approvalInput.checked : false;
+      
       if (!title) return;
 
       try {
         const res = await fetch(\`/api/children/\${childId}/tasks\`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, icon })
+          body: JSON.stringify({ title, icon, requiresApproval, audioFeedback })
         });
         if (!res.ok) throw new Error('Failed to add task');
         titleInput.value = '';
+        if (approvalInput) approvalInput.checked = false;
+        if (audioInput) audioInput.value = '';
         showToast(\`המשימה "\${title}" נוספה ונשמרה בקובץ! ✓\`);
       } catch (err) {
         showToast('שגיאה בהוספת משימה: ' + err.message, 'error');
@@ -4300,10 +4361,16 @@ mode: single
     async function handleUpdateTask(childId, taskId, silent = false) {
       const titleInput = document.getElementById(\`task-title-\${childId}-\${taskId}\`);
       const iconSelect = document.getElementById(\`task-icon-\${childId}-\${taskId}\`);
+      const audioSelect = document.getElementById(\`task-audio-\${childId}-\${taskId}\`);
+      const approvalCheckbox = document.getElementById(\`task-approval-\${childId}-\${taskId}\`);
       const previewEl = document.getElementById(\`task-preview-\${childId}-\${taskId}\`);
+      
       if (!titleInput) return;
       const title = titleInput.value.trim();
       const icon = iconSelect ? iconSelect.value : undefined;
+      const audioFeedback = audioSelect ? audioSelect.value.trim() : '';
+      const requiresApproval = approvalCheckbox ? approvalCheckbox.checked : false;
+      
       if (!title) return;
 
       // Update icon preview live
@@ -4334,19 +4401,27 @@ mode: single
 
       const child = appData && appData.children ? appData.children.find(c => c.id === childId) : null;
       const task = child && child.tasks ? child.tasks.find(t => t.id === taskId) : null;
-      if (task && task.title === title && task.icon === icon) return;
+      if (task && 
+          task.title === title && 
+          task.icon === icon && 
+          Boolean(task.requiresApproval) === Boolean(requiresApproval) && 
+          (task.audioFeedback || '') === audioFeedback) {
+        return;
+      }
 
       try {
         const res = await fetch(\`/api/children/\${childId}/tasks/\${taskId}\`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, icon })
+          body: JSON.stringify({ title, icon, requiresApproval, audioFeedback })
         });
         if (!res.ok) throw new Error('Failed to update task');
 
         if (task) {
           task.title = title;
           if (icon !== undefined) task.icon = icon;
+          task.requiresApproval = requiresApproval;
+          task.audioFeedback = audioFeedback;
         }
 
         const feedback = document.getElementById(\`feedback-task-\${childId}-\${taskId}\`);
@@ -4356,7 +4431,7 @@ mode: single
         }
         titleInput.classList.add('border-emerald-500');
         setTimeout(() => titleInput.classList.remove('border-emerald-500'), 2000);
-        showToast(\`המשימה "\${title}" עודכנה ונשמרה בקובץ! ✓\`);
+        if (!silent) showToast(\`המשימה "\${title}" עודכנה ונשמרה בהצלחה! ✓\`);
       } catch (err) {
         if (!silent) showToast('שגיאה בעדכון משימה: ' + err.message, 'error');
       }
