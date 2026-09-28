@@ -36,6 +36,8 @@ const ICONS_DIR = path.join(__dirname, 'icons');
 
 // Serve icons directory statically
 app.use('/icons', express.static(ICONS_DIR));
+const SOUNDS_DIR = path.join(__dirname, 'sounds');
+app.use('/sounds', express.static(SOUNDS_DIR));
 
 // Helper for local YYYY-MM-DD
 function getTodayDateString() {
@@ -104,6 +106,7 @@ const DEFAULT_TASKS_DATA = {
   parentPin: null,
   settings: {
     resetTime: '06:00',
+    audio: { presets: ['כל הכבוד!', 'יופי של עבודה!', 'אלוף!'] },
     bypassSchedule: {
       enabled: false,
       schedule: {
@@ -162,6 +165,12 @@ function normalizeTasksData(data) {
     data.settings = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings));
   } else {
     if (typeof data.settings.resetTime !== 'string') data.settings.resetTime = '06:00';
+      if (!data.settings.audio || typeof data.settings.audio !== 'object') {
+        data.settings.audio = { presets: ['כל הכבוד!', 'יופי של עבודה!', 'אלוף!'] };
+      }
+      if (!Array.isArray(data.settings.audio.presets)) {
+        data.settings.audio.presets = [];
+      }
     if (!data.settings.bypassSchedule || typeof data.settings.bypassSchedule !== 'object') {
       data.settings.bypassSchedule = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings.bypassSchedule));
     } else {
@@ -1077,6 +1086,28 @@ function startHassPolling() {
 app.use(express.json());
 
 // API Endpoint: Available Icons list
+app.post('/api/sounds/upload', express.json({limit: '20mb'}), (req, res) => {
+  try {
+    const { filename, base64 } = req.body;
+    if (!filename || !base64) return res.status(400).json({ error: 'Missing data' });
+    const buffer = Buffer.from(base64.split(',')[1] || base64, 'base64');
+    require('fs').writeFileSync(require('path').join(SOUNDS_DIR, filename), buffer);
+    res.json({ success: true, file: filename });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/sounds', (req, res) => {
+  try {
+    if (!fs.existsSync(SOUNDS_DIR)) return res.json({ sounds: [] });
+    const files = fs.readdirSync(SOUNDS_DIR).filter(f => f.match(/\.(mp3|wav|ogg)$/i));
+    res.json({ sounds: files });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read sounds directory' });
+  }
+});
+
 app.get('/api/icons', (req, res) => {
   try {
     const files = fs.readdirSync(ICONS_DIR).filter(f => f.endsWith('.svg'));
@@ -1501,7 +1532,7 @@ app.get('/api/settings', (req, res) => {
 // API Endpoint: Save settings
 app.post('/api/settings', (req, res) => {
   try {
-    const { resetTime, bypassSchedule } = req.body;
+    const { resetTime, bypassSchedule, audio } = req.body;
     const data = readTasks();
     if (!data.settings) data.settings = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings));
     if (resetTime !== undefined) {
@@ -2974,7 +3005,44 @@ mode: single
         <p class="text-sm text-slate-400 mt-1">תזמון אוטומטי לאיפוס משימות ולפתיחת הטלוויזיה</p>
       </div>
 
-      <!-- Card 1: Auto Reset -->
+        <!-- Card 0: Audio Library -->
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5 mb-6">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🎵</span>
+              <div>
+                <h3 class="text-xl font-black text-white">ספריית צלילים והקראה (TTS)</h3>
+                <p class="text-xs text-slate-400 mt-0.5">הוסף טקסט להקראה או העלה קבצי שמע</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="space-y-3">
+            <div id="settings-tts-presets-list" class="space-y-2">
+              <!-- Populated by JS -->
+            </div>
+            
+            <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4 mt-4">
+              <div class="flex gap-2">
+                <input type="text" id="settings-new-tts-preset" class="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="הקלד משפט להקראה (TTS)...">
+                <button type="button" onclick="addTtsPreset()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition">הוסף טקסט</button>
+              </div>
+              
+              <div class="relative flex items-center py-1">
+                <div class="flex-grow border-t border-slate-700"></div>
+                <span class="flex-shrink-0 mx-4 text-slate-500 text-xs font-bold uppercase tracking-widest">או</span>
+                <div class="flex-grow border-t border-slate-700"></div>
+              </div>
+              
+              <div class="flex gap-2 items-center">
+                <input type="file" id="settings-upload-audio" accept="audio/*" class="flex-1 text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-800 file:text-slate-300 hover:file:bg-slate-700">
+                <button type="button" onclick="uploadAudioFile()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md transition">העלה קובץ שמע</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Card 1: Auto Reset -->
       <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
         <div class="flex items-center gap-3">
           <span class="text-2xl">🔄</span>
@@ -3389,7 +3457,106 @@ mode: single
       }).join('');
     }
 
-    // --- TAB 2: Manage Children & Tasks ---
+    
+    async function saveAudioPresets() {
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio: settingsData.audio })
+        });
+        if(!res.ok) throw new Error('failed');
+        const d = await res.json();
+        settingsData = d.settings;
+        showToast('הגדרות צלילים נשמרו ✓');
+        renderSettingsTab();
+        renderManageTab();
+      } catch(e) {
+        showToast('שגיאה: ' + e.message, 'error');
+      }
+    }
+
+    
+    async function uploadAudioFile() {
+      const fileInput = document.getElementById('settings-upload-audio');
+      if (!fileInput.files || fileInput.files.length === 0) {
+        showToast('יש לבחור קובץ קודם', 'error');
+        return;
+      }
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const res = await fetch('/api/sounds/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: file.name, base64: e.target.result })
+          });
+          if (!res.ok) throw new Error('Upload failed');
+          const data = await res.json();
+          
+          if (!settingsData.audio) settingsData.audio = {};
+          if (!settingsData.audio.presets) settingsData.audio.presets = [];
+          settingsData.audio.presets.push(data.file);
+          await saveAudioPresets();
+          fileInput.value = '';
+          showToast('הקובץ הועלה בהצלחה!');
+          await loadSounds(); // Refresh window.availableSounds
+        } catch (err) {
+          showToast('שגיאה בהעלאה: ' + err.message, 'error');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function addTtsPreset() {
+      const input = document.getElementById('settings-new-tts-preset');
+      const val = input.value.trim();
+      if (!val) return;
+      if (!settingsData.audio) settingsData.audio = {};
+      if (!settingsData.audio.presets) settingsData.audio.presets = [];
+      settingsData.audio.presets.push(val);
+      input.value = '';
+      await saveAudioPresets();
+    }
+
+    async function removeTtsPreset(index) {
+      if (!settingsData.audio || !settingsData.audio.presets) return;
+      settingsData.audio.presets.splice(index, 1);
+      await saveAudioPresets();
+    }
+    
+    window._currentAudio = null;
+    window.playSnd = function(txtOrFile, stopBtnEl = null) {
+      // Stop anything currently playing
+      if (window._currentAudio) {
+        window._currentAudio.pause();
+        window._currentAudio = null;
+      }
+      speechSynthesis.cancel();
+      
+      // If no file given, this was just a stop command
+      if (!txtOrFile) return;
+
+      if (txtOrFile.match(/\.(mp3|wav|ogg)$/i)) {
+        window._currentAudio = new Audio('/sounds/' + txtOrFile);
+        window._currentAudio.play().catch(e => console.warn('Audio play failed:', e));
+      } else {
+        const u = new SpeechSynthesisUtterance(txtOrFile);
+        u.lang = 'he-IL';
+        speechSynthesis.speak(u);
+      }
+    };
+    
+    window.stopSnd = function() {
+      if (window._currentAudio) {
+        window._currentAudio.pause();
+        window._currentAudio = null;
+      }
+      speechSynthesis.cancel();
+    };
+    
+  // --- TAB 2: Manage Children & Tasks ---
     function renderManageTab() {
       const container = document.getElementById('children-manage-container');
       
@@ -4197,6 +4364,23 @@ mode: single
 
     function renderSettingsTab() {
       const s = settingsData;
+      
+      const presetListEl = document.getElementById('settings-tts-presets-list');
+      if (presetListEl) {
+        const presets = (s.audio && s.audio.presets) ? s.audio.presets : [];
+        presetListEl.innerHTML = presets.length === 0 
+          ? '<p class="text-xs text-slate-500">אין פריטים בספרייה. הוסף מטה.</p>'
+          : presets.map((preset, index) => \`
+            <div class="flex items-center justify-between bg-slate-800/50 px-3 py-2 rounded-lg">
+              <span class="text-sm text-slate-200">\${preset}</span>
+              <div class="flex items-center gap-3">
+                <button type="button" onclick="window.playSnd('\${preset.replace(/'/g, "\\\\\\'")}')" class="text-indigo-400 hover:text-indigo-300" title="נגן">▶️</button>
+                <button type="button" onclick="window.stopSnd()" class="text-amber-400 hover:text-amber-300" title="עצור">⏹️</button>
+                <button type="button" onclick="removeTtsPreset(\${index})" class="text-xs text-rose-400 hover:text-rose-300 font-bold">מחק</button>
+              </div>
+            </div>
+          \`).join('');
+      }
       // Reset time
       const resetEnabled = s.resetTime && s.resetTime.trim() !== '';
       const resetTimeEl = document.getElementById('settings-reset-time');
