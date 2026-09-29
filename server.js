@@ -4963,6 +4963,7 @@ mode: single
       const icon = iconInput ? iconInput.value : 'star';
       const audioFeedback = audioInput ? audioInput.value.trim() : '';
       const requiresApproval = approvalInput ? approvalInput.checked : false;
+      const enabledInput = document.getElementById(\`new-task-enabled-\${childId}\`);
       const enabled = enabledInput ? enabledInput.checked : true;
       
       if (!title) return;
@@ -4995,6 +4996,7 @@ mode: single
       const icon = iconSelect ? iconSelect.value : undefined;
       const audioFeedback = audioSelect ? audioSelect.value.trim() : '';
       const requiresApproval = approvalCheckbox ? approvalCheckbox.checked : false;
+      const enabledCheckbox = document.getElementById(\`task-enabled-\${childId}-\${taskId}\`);
       const enabled = enabledCheckbox ? enabledCheckbox.checked : true;
       
       if (!title) return;
