@@ -614,7 +614,7 @@ async function createAndSyncAllHassEntities(data) {
   for (const child of data.children) {
     const enabledTasks = child.tasks.filter(t => t.enabled !== false);
         const total = enabledTasks.length;
-    const done = child.tasks.filter(t => t.completed).length;
+    const done = enabledTasks.filter(t => t.completed).length;
     const isChildDone = total > 0 && done === total;
     const childEntityId = `binary_sensor.kids_tasks_${child.id}_completed`;
     const childRemainingId = `sensor.kids_tasks_${child.id}_remaining`;
@@ -3938,7 +3938,7 @@ mode: single
       container.innerHTML = appData.children.map(child => {
         const enabledTasks = child.tasks.filter(t => t.enabled !== false);
         const total = enabledTasks.length;
-        const done = child.tasks.filter(t => t.completed).length;
+        const done = enabledTasks.filter(t => t.completed).length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         const isFinished = total > 0 && done === total;
 
@@ -3964,7 +3964,7 @@ mode: single
 
             <!-- Tasks list in parent status -->
             <div class="space-y-2">
-              \${child.tasks.length === 0 ? '<p class="text-xs text-slate-500 py-3 text-center">אין משימות</p>' : child.tasks.map(task => {
+              \${enabledTasks.length === 0 ? '<p class=\"text-xs text-slate-500 py-3 text-center\">אין משימות</p>' : enabledTasks.map(task => {
                 const isDone = task.completed;
                 const isPending = !isDone && task.pendingApproval;
                 const timeStr = isDone && task.completedAt ? formatTime(task.completedAt) : null;
@@ -4287,53 +4287,53 @@ mode: single
             </div>
 
             <!-- Add Task Form with clean responsive layout -->
-            <form onsubmit="handleAddTask(event, '\${child.id}')" class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-3">
-              <div class="flex items-center gap-2 text-xs font-bold text-slate-400">
+            <form onsubmit="handleAddTask(event, '\${child.id}')" class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4 relative overflow-visible">
+              <div class="absolute -top-3 right-4 bg-slate-950 px-2 flex items-center gap-1 text-[10px] font-black text-slate-400 tracking-wider">
                 <span>➕</span>
-                <span>הוספת משימה חדשה</span>
+                <span>משימה חדשה</span>
               </div>
               
-              <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                <div class="md:col-span-5 flex items-center gap-2">
-                  <select 
-                    id="new-task-icon-\${child.id}" 
-                    class="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-shrink-0"
-                    title="בחר אייקון"
-                  >
-                    \${iconOptionsHtml}
-                  </select>
-                  <input 
-                    type="text" 
-                    id="new-task-title-\${child.id}" 
-                    placeholder="שם המשימה (למשל: סידור חדר)..." 
-                    required
-                    class="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                </div>
+              <div class="flex items-center gap-3 flex-1 min-w-0 pt-1 md:pt-0">
+                <select 
+                  id="new-task-icon-\${child.id}" 
+                  class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-shrink-0"
+                  title="בחר אייקון"
+                >
+                  \${iconOptionsHtml}
+                </select>
+                <input 
+                  type="text" 
+                  id="new-task-title-\${child.id}" 
+                  placeholder="שם המשימה (למשל: סידור חדר)..." 
+                  required
+                  class="bg-slate-900/60 border border-slate-800 focus:border-indigo-500 text-white font-bold text-sm px-3 py-1.5 rounded-xl flex-1 focus:outline-none transition min-w-[120px] placeholder-slate-500"
+                >
+              </div>
 
-                <div class="md:col-span-4">
+              <div class="flex flex-wrap items-center justify-between xl:justify-end gap-2.5 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800/80 flex-shrink-0 w-full md:w-auto">
+                <div class="flex flex-wrap items-center gap-2">
                   <select 
                     id="new-task-audio-\${child.id}" 
-                    class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36 sm:w-44"
                     title="בחר צליל או הקראה למשימה"
                   >
                     \${getAudioOptionsHtml('')}
                   </select>
+
+                  <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו דורשת אישור הורה">
+                    <input type="checkbox" id="new-task-approval-\${child.id}" class="w-4 h-4 rounded accent-indigo-600">
+                    <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+                  </label>
+
+                  <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו פעילה">
+                    <input type="checkbox" id="new-task-enabled-\${child.id}" checked class="w-4 h-4 rounded accent-indigo-600">
+                    <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">פעיל ✅</span>
+                  </label>
                 </div>
 
-                <div class="md:col-span-3 flex items-center justify-between md:justify-end gap-2.5">
-                  <label class="flex items-center gap-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו דורשת אישור הורה">
-                    <input type="checkbox" id="new-task-approval-\${child.id}" class="w-4 h-4 rounded accent-indigo-600">
-                    <span class="text-xs font-bold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
-                  </label>
-
-                  <label class="flex items-center gap-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו פעילה">
-                    <input type="checkbox" id="new-task-enabled-\${child.id}" checked class="w-4 h-4 rounded accent-indigo-600">
-                    <span class="text-xs font-bold text-slate-300 whitespace-nowrap">פעיל ✅</span>
-                  </label>
-
-                  <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md transition whitespace-nowrap flex items-center gap-1 flex-shrink-0">
-                    <span>+</span>
+                <div class="flex items-center gap-1.5">
+                  <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow active:scale-95 flex-shrink-0">
+                    <span>➕</span>
                     <span>הוסף</span>
                   </button>
                 </div>
@@ -4397,8 +4397,8 @@ mode: single
                       </div>
 
                       <!-- Part 2: Audio dropdown + Approval toggle + Actions -->
-                      <div class="flex items-center justify-between md:justify-end gap-2.5 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800/80 flex-shrink-0">
-                        <div class="flex items-center gap-2">
+                      <div class="flex flex-wrap items-center justify-between xl:justify-end gap-2.5 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800/80 flex-shrink-0 w-full md:w-auto">
+                        <div class="flex flex-wrap items-center gap-2">
                           <select
                             id="task-audio-\${child.id}-\${task.id}"
                             onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
@@ -5033,6 +5033,7 @@ mode: single
           task.title === title && 
           task.icon === icon && 
           Boolean(task.requiresApproval) === Boolean(requiresApproval) && 
+          Boolean(task.enabled) === Boolean(enabled) &&
           (task.audioFeedback || '') === audioFeedback) {
         return;
       }
@@ -5050,6 +5051,7 @@ mode: single
           if (icon !== undefined) task.icon = icon;
           task.requiresApproval = requiresApproval;
           task.audioFeedback = audioFeedback;
+          task.enabled = enabled;
         }
 
         const feedback = document.getElementById(\`feedback-task-\${childId}-\${taskId}\`);
