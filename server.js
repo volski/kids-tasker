@@ -344,6 +344,8 @@ function normalizeTasksData(data) {
       if (task.audioFeedback === undefined) task.audioFeedback = '';
       else task.audioFeedback = String(task.audioFeedback).trim();
       if (!task.icon) task.icon = guessIconFromTitle(task.title);
+      if (task.enabled === undefined) task.enabled = true;
+      else task.enabled = Boolean(task.enabled);
     });
   });
 
@@ -465,6 +467,7 @@ function calculateCompletionStatus(data) {
 
   (data.children || []).forEach(child => {
     (child.tasks || []).forEach(task => {
+      if (task.enabled === false) return;
       totalTasks++;
       if (task.completed) completedTasks++;
     });
@@ -609,7 +612,8 @@ async function createAndSyncAllHassEntities(data) {
 
   // 6. Automatically generate entities for each child
   for (const child of data.children) {
-    const total = child.tasks.length;
+    const enabledTasks = child.tasks.filter(t => t.enabled !== false);
+        const total = enabledTasks.length;
     const done = child.tasks.filter(t => t.completed).length;
     const isChildDone = total > 0 && done === total;
     const childEntityId = `binary_sensor.kids_tasks_${child.id}_completed`;
@@ -1984,7 +1988,8 @@ app.post('/api/children/:id/tasks', (req, res) => {
       completedAt: null,
       icon: assignedIcon,
       requiresApproval: Boolean(req.body.requiresApproval),
-      audioFeedback: typeof req.body.audioFeedback === 'string' ? req.body.audioFeedback.trim() : ''
+      audioFeedback: typeof req.body.audioFeedback === 'string' ? req.body.audioFeedback.trim() : '',
+      enabled: req.body.enabled !== undefined ? Boolean(req.body.enabled) : true
     };
 
     child.tasks.push(newTask);
@@ -2003,7 +2008,7 @@ app.put('/api/children/:id/tasks/:taskId', (req, res) => {
   const { id, taskId } = req.params;
   const { title, icon } = req.body;
 
-  if (!title && !icon && req.body.requiresApproval === undefined && req.body.audioFeedback === undefined) {
+  if (!title && !icon && req.body.requiresApproval === undefined && req.body.audioFeedback === undefined && req.body.enabled === undefined) {
     return res.status(400).json({ error: 'At least one field is required to update task' });
   }
 
@@ -2023,6 +2028,7 @@ app.put('/api/children/:id/tasks/:taskId', (req, res) => {
     if (icon && typeof icon === 'string') task.icon = icon.trim();
     if (req.body.requiresApproval !== undefined) task.requiresApproval = Boolean(req.body.requiresApproval);
     if (req.body.audioFeedback !== undefined) task.audioFeedback = String(req.body.audioFeedback).trim();
+    if (req.body.enabled !== undefined) task.enabled = Boolean(req.body.enabled);
 
     writeTasks(data);
     io.emit('task_updated', data);
@@ -2364,8 +2370,9 @@ app.get('/', (req, res) => {
       let total = 0;
       let completed = 0;
       data.children.forEach(c => {
-        total += c.tasks.length;
-        completed += c.tasks.filter(t => t.completed).length;
+        const enabledTasks = c.tasks.filter(t => t.enabled !== false);
+        total += enabledTasks.length;
+        completed += enabledTasks.filter(t => t.completed).length;
       });
       const allDone = total > 0 && completed === total;
       const isBypass = Boolean(data.homeAssistant && data.homeAssistant.parentBypass);
@@ -2416,8 +2423,9 @@ app.get('/', (req, res) => {
 
       boardElem.innerHTML = data.children.map((child, index) => {
         const theme = childColors[index % childColors.length];
-        const total = child.tasks.length;
-        const completed = child.tasks.filter(t => t.completed).length;
+        const enabledTasks = child.tasks.filter(t => t.enabled !== false);
+        const total = enabledTasks.length;
+        const completed = enabledTasks.filter(t => t.completed).length;
         const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
         const isAllDone = total > 0 && completed === total;
 
@@ -2456,7 +2464,7 @@ app.get('/', (req, res) => {
 
             <!-- Tasks List with Icons -->
             <div class="flex flex-col gap-3.5" role="list">
-              \${child.tasks.length === 0 ? '<p class="text-slate-500 text-center py-6">אין משימות מוגדרות לילד זה</p>' : child.tasks.map(task => {
+              \${enabledTasks.length === 0 ? '<p class=\"text-slate-500 text-center py-6\">אין משימות מוגדרות לילד זה</p>' : enabledTasks.map(task => {
                 const isCompleted = task.completed;
                 const isPending = !isCompleted && task.pendingApproval;
 
@@ -2595,34 +2603,18 @@ app.get('/', (req, res) => {
               doneCallback();
             });
           }
-        } else {
+                } else {
           const ttsAudio = new Audio('/api/tts?text=' + encodeURIComponent(value) + (voice ? '&voice=' + encodeURIComponent(voice) : ''));
-          let ttsFellBack = false;
-          const fallbackSpeech = () => {
-            if (ttsFellBack || finished) return;
-            ttsFellBack = true;
-            if ('speechSynthesis' in window) {
-              window.speechSynthesis.cancel();
-              const utterance = new SpeechSynthesisUtterance(value);
-              utterance.lang = 'he-IL';
-              utterance.rate = 1.0;
-              utterance.onend = doneCallback;
-              utterance.onerror = doneCallback;
-              window.speechSynthesis.speak(utterance);
-            } else {
-              doneCallback();
-            }
-          };
           ttsAudio.addEventListener('ended', doneCallback, { once: true });
           ttsAudio.addEventListener('error', (err) => {
-            console.warn('Server TTS failed, falling back to speechSynthesis', err);
-            fallbackSpeech();
+            console.warn('Server TTS failed:', err);
+            doneCallback();
           }, { once: true });
           const ttsPlayPromise = ttsAudio.play();
           if (ttsPlayPromise !== undefined) {
             ttsPlayPromise.catch(err => {
-              console.warn('Server TTS play failed, falling back to speechSynthesis', err);
-              fallbackSpeech();
+              console.warn('Server TTS play failed:', err);
+              doneCallback();
             });
           }
         }
@@ -3911,8 +3903,9 @@ mode: single
       let completedTasks = 0;
 
       appData.children.forEach(c => {
-        totalTasks += c.tasks.length;
-        completedTasks += c.tasks.filter(t => t.completed).length;
+        const enabledT = c.tasks.filter(t => t.enabled !== false);
+        totalTasks += enabledT.length;
+        completedTasks += enabledT.filter(t => t.completed).length;
       });
 
       const overallPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
@@ -3943,7 +3936,8 @@ mode: single
       }
 
       container.innerHTML = appData.children.map(child => {
-        const total = child.tasks.length;
+        const enabledTasks = child.tasks.filter(t => t.enabled !== false);
+        const total = enabledTasks.length;
         const done = child.tasks.filter(t => t.completed).length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         const isFinished = total > 0 && done === total;
@@ -4150,22 +4144,10 @@ mode: single
         const soundUrl = (val.startsWith('/') || val.startsWith('http')) ? val : ('/sounds/' + encodeURIComponent(val));
         window._currentAudio = new Audio(soundUrl);
         window._currentAudio.play().catch(e => console.warn('Audio play failed:', e));
-      } else {
-        let ttsFellBack = false;
-        const ttsFallback = () => {
-          if (ttsFellBack) return;
-          ttsFellBack = true;
-          if ('speechSynthesis' in window) {
-            const u = new SpeechSynthesisUtterance(val);
-            u.lang = 'he-IL';
-            speechSynthesis.speak(u);
-          }
-        };
+            } else {
         window._currentAudio = new Audio('/api/tts?text=' + encodeURIComponent(val) + (voice ? '&voice=' + encodeURIComponent(voice) : ''));
-        window._currentAudio.addEventListener('error', ttsFallback, { once: true });
         window._currentAudio.play().catch(e => {
           console.warn('Audio play failed:', e);
-          ttsFallback();
         });
       }
     };
@@ -4345,6 +4327,11 @@ mode: single
                     <span class="text-xs font-bold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
                   </label>
 
+                  <label class="flex items-center gap-1.5 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו פעילה">
+                    <input type="checkbox" id="new-task-enabled-\${child.id}" checked class="w-4 h-4 rounded accent-indigo-600">
+                    <span class="text-xs font-bold text-slate-300 whitespace-nowrap">פעיל ✅</span>
+                  </label>
+
                   <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md transition whitespace-nowrap flex items-center gap-1 flex-shrink-0">
                     <span>+</span>
                     <span>הוסף</span>
@@ -4430,6 +4417,17 @@ mode: single
                               class="w-4 h-4 rounded accent-indigo-600"
                             >
                             <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+                          </label>
+
+                          <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none" title="האם משימה זו פעילה">
+                            <input 
+                              type="checkbox" 
+                              id="task-enabled-\${child.id}-\${task.id}" 
+                              \${task.enabled ? 'checked' : ''}
+                              onchange="handleUpdateTask('\${child.id}', '\${task.id}', true)"
+                              class="w-4 h-4 rounded accent-indigo-600"
+                            >
+                            <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">פעיל ✅</span>
                           </label>
                         </div>
 
@@ -4965,6 +4963,7 @@ mode: single
       const icon = iconInput ? iconInput.value : 'star';
       const audioFeedback = audioInput ? audioInput.value.trim() : '';
       const requiresApproval = approvalInput ? approvalInput.checked : false;
+      const enabled = enabledInput ? enabledInput.checked : true;
       
       if (!title) return;
 
@@ -4972,7 +4971,7 @@ mode: single
         const res = await fetch(\`/api/children/\${childId}/tasks\`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, icon, requiresApproval, audioFeedback })
+          body: JSON.stringify({ title, icon, requiresApproval, audioFeedback, enabled })
         });
         if (!res.ok) throw new Error('Failed to add task');
         titleInput.value = '';
@@ -4996,6 +4995,7 @@ mode: single
       const icon = iconSelect ? iconSelect.value : undefined;
       const audioFeedback = audioSelect ? audioSelect.value.trim() : '';
       const requiresApproval = approvalCheckbox ? approvalCheckbox.checked : false;
+      const enabled = enabledCheckbox ? enabledCheckbox.checked : true;
       
       if (!title) return;
 
@@ -5039,7 +5039,7 @@ mode: single
         const res = await fetch(\`/api/children/\${childId}/tasks/\${taskId}\`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, icon, requiresApproval, audioFeedback })
+          body: JSON.stringify({ title, icon, requiresApproval, audioFeedback, enabled })
         });
         if (!res.ok) throw new Error('Failed to update task');
 
