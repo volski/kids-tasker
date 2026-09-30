@@ -1907,7 +1907,7 @@ app.post('/api/children', (req, res) => {
     io.emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
-    res.status(201).json({ success: true, child: newChild, data });
+    res.status(201).json({ success: true, child: newChild });
   } catch (error) {
     console.error('Failed to add child:', error);
     res.status(500).json({ error: 'Failed to add child' });
@@ -1934,7 +1934,7 @@ app.put('/api/children/:id', (req, res) => {
     io.emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
-    res.json({ success: true, child, data });
+    res.json({ success: true, child });
   } catch (error) {
     console.error('Failed to update child:', error);
     res.status(500).json({ error: 'Failed to update child' });
@@ -1956,7 +1956,7 @@ app.delete('/api/children/:id', (req, res) => {
     io.emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
-    res.json({ success: true, removed: removedChild, data });
+    res.json({ success: true, removed: removedChild });
   } catch (error) {
     console.error('Failed to delete child:', error);
     res.status(500).json({ error: 'Failed to delete child' });
@@ -1997,7 +1997,7 @@ app.post('/api/children/:id/tasks', (req, res) => {
     io.emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
-    res.status(201).json({ success: true, task: newTask, data });
+    res.status(201).json({ success: true, task: newTask });
   } catch (error) {
     console.error('Failed to add task:', error);
     res.status(500).json({ error: 'Failed to add task' });
@@ -2030,11 +2030,22 @@ app.put('/api/children/:id/tasks/:taskId', (req, res) => {
     if (req.body.audioFeedback !== undefined) task.audioFeedback = String(req.body.audioFeedback).trim();
     if (req.body.enabled !== undefined) task.enabled = Boolean(req.body.enabled);
 
-    writeTasks(data);
-    io.emit('task_updated', data);
-    createAndSyncAllHassEntities(data).catch(() => {});
+    const changes = {};
+      if (title !== undefined && typeof title === 'string') changes.title = task.title;
+      if (icon !== undefined && typeof icon === 'string') changes.icon = task.icon;
+      if (req.body.requiresApproval !== undefined) changes.requiresApproval = task.requiresApproval;
+      if (req.body.audioFeedback !== undefined) changes.audioFeedback = task.audioFeedback;
+      if (req.body.enabled !== undefined) changes.enabled = task.enabled;
 
-    res.json({ success: true, task, data });
+      writeTasks(data);
+      io.emit('task_delta', {
+        childId: id,
+        taskId: taskId,
+        changes: changes
+      });
+      createAndSyncAllHassEntities(data).catch(() => {});
+
+      res.json({ success: true, task });
   } catch (error) {
     console.error('Failed to update task:', error);
     res.status(500).json({ error: 'Failed to update task' });
@@ -2061,7 +2072,7 @@ app.delete('/api/children/:id/tasks/:taskId', (req, res) => {
     io.emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
-    res.json({ success: true, removed: removedTask, data });
+    res.json({ success: true, removed: removedTask });
   } catch (error) {
     console.error('Failed to delete task:', error);
     res.status(500).json({ error: 'Failed to delete task' });
@@ -2094,7 +2105,7 @@ app.post('/api/children/:id/tasks/reorder', (req, res) => {
     writeTasks(data);
     io.emit('task_updated', data);
 
-    res.json({ success: true, data });
+    res.json({ success: true });
   } catch (error) {
     console.error('Failed to reorder tasks:', error);
     res.status(500).json({ error: 'Failed to reorder tasks' });
