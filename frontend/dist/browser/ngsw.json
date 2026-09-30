@@ -1,6 +1,6 @@
 {
   "configVersion": 1,
-  "timestamp": 1790783298259,
+  "timestamp": 1790800983318,
   "index": "/index.html",
   "assetGroups": [
     {
@@ -24,7 +24,7 @@
         "/main-PDQBTD3S.js",
         "/manifest.webmanifest",
         "/polyfills-FFHMD2TL.js",
-        "/styles-GEALBEVM.css"
+        "/styles-CTDKSNWY.css"
       ],
       "patterns": []
     },
@@ -74,7 +74,7 @@
     "/main-PDQBTD3S.js": "d92aa3c192c6aeb493916ab37a07147dba3ced98",
     "/manifest.webmanifest": "198ba8479188374e6b5e12c281cda761aeb4a3fe",
     "/polyfills-FFHMD2TL.js": "f49b49a155bc7d192db62a4c15d0a612b460a667",
-    "/styles-GEALBEVM.css": "daf23141f77902b5b47bf16bc84890777e1c1c4e"
+    "/styles-CTDKSNWY.css": "61817765701ff5f2aad20d0ae04a1f0429f1f722"
   },
   "navigationUrls": [
     {
