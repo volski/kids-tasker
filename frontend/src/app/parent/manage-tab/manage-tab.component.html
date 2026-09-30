@@ -1,7 +1,7 @@
 <div class="space-y-8">
   
   <!-- Add Child Card -->
-  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl">
     <h3 class="text-xl font-black text-white mb-4 flex items-center gap-2">
       <span>➕</span>
       <span>הוספת ילד/ה חדש/ה</span>
@@ -15,7 +15,7 @@
         required
         class="flex-1 px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
       >
-      <button type="submit" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg transition whitespace-nowrap">
+      <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg transition whitespace-nowrap">
         הוסף ילד/ה
       </button>
     </form>
@@ -28,7 +28,7 @@
     }
 
     @for (child of children(); track child.id) {
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-6">
         
         <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
           <div class="flex items-center gap-3 flex-1 min-w-[200px]">
@@ -143,8 +143,8 @@
                 (dragover)="onDragOver($event, child.id, i)"
               >
                 <!-- Part 1: Drag + Icon + Title -->
-                <div class="flex items-center gap-3 flex-1 min-w-0">
-                  <span class="text-slate-600 hover:text-slate-400 select-none flex-shrink-0 cursor-grab text-lg leading-none" title="גרור לשינוי סדר">⠿</span>
+                <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 flex-1 min-w-0">
+                  <span class="text-slate-600 hover:text-slate-400 select-none flex-shrink-0 cursor-grab text-lg leading-none hidden sm:block" title="גרור לשינוי סדר">⠿</span>
 
                   <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-inner">
                     @if (!task.icon || task.icon === 'none') {

@@ -5,7 +5,7 @@
   </div>
 
   <!-- Audio Library -->
-  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5 mb-6">
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-5 mb-6">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <span class="text-2xl">🎵</span>
@@ -24,7 +24,7 @@
           @for (preset of presets; track preset.id || preset.value; let i = $index) {
             @let isUsed = isPresetUsed(preset);
             
-            <div class="flex items-center justify-between bg-slate-800/70 border border-slate-700/60 px-4 py-3 rounded-2xl gap-3 shadow-sm hover:border-slate-600 transition">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-800/70 border border-slate-700/60 px-4 py-3 rounded-2xl gap-3 shadow-sm hover:border-slate-600 transition">
               <div class="flex items-center gap-3 min-w-0">
                 <div class="w-10 h-10 rounded-xl bg-slate-900/80 border border-slate-700/50 flex items-center justify-center text-xl flex-shrink-0">
                   {{ preset.type === 'audio' ? '🎵' : '🗣️' }}
@@ -41,7 +41,7 @@
                   </div>
                 </div>
               </div>
-              <div class="flex items-center gap-2 flex-shrink-0">
+              <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
                 @if (preset.type === 'tts') {
                   <select [ngModel]="preset.voice || 'female'" (ngModelChange)="setPresetVoice(i, $event)" title="בחר קול להקראה" class="px-2 py-1.5 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
                     <option value="female">👩 קול נשי</option>
@@ -85,7 +85,7 @@
   </div>
   
   <!-- Auto Reset -->
-  <form #resetForm="ngForm" (submit)="saveResetSettings(resetForm.value.resetTime, resetForm.value.resetEnabled)" class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-5">
+  <form #resetForm="ngForm" (submit)="saveResetSettings(resetForm.value.resetTime, resetForm.value.resetEnabled)" class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-5">
     <div class="flex items-center gap-3">
       <span class="text-2xl">🔄</span>
       <div>
