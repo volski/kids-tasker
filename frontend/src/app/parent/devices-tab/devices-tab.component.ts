@@ -6,6 +6,7 @@ import * as QRCode from 'qrcode';
 import { HouseholdService, HouseholdInfo, FamilyMember } from '../../services/household.service';
 import { FamilyOnboardingComponent } from '../../family-onboarding/family-onboarding.component';
 import { FirebaseAuthService } from '../../core/services/firebase-auth.service';
+import { ParentShellComponent } from '../parent-shell/parent-shell.component';
 
 export interface AllowedDevice {
   deviceId: string;
@@ -76,6 +77,13 @@ export interface AllowedDevice {
               <span>⚙️</span>
               <span>צור / הצטרף למשפחה</span>
             </button>
+
+            @if (isOwner()) {
+              <button (click)="deleteHousehold()" class="px-3.5 py-2 bg-rose-950/80 hover:bg-rose-900 border border-rose-800/80 text-rose-300 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow">
+                <span>🗑️</span>
+                <span>מחק משפחה</span>
+              </button>
+            }
           </div>
         </div>
 
@@ -336,6 +344,7 @@ export class DevicesTabComponent implements OnInit {
   private http = inject(HttpClient);
   private householdService = inject(HouseholdService);
   private authService = inject(FirebaseAuthService);
+  private shell = inject(ParentShellComponent, { optional: true });
 
   public household = signal<HouseholdInfo | null>(null);
   public devices = signal<AllowedDevice[]>([]);
@@ -484,7 +493,25 @@ export class DevicesTabComponent implements OnInit {
       next: (res) => {
         if (res && res.household) {
           this.household.set(res.household);
+          this.showFamilyModal.set(true);
         }
+      }
+    });
+  }
+
+  public deleteHousehold() {
+    if (!confirm('האם אתה בטוח שברצונך למחוק את המשפחה? כל חברי המשפחה ינותקו והנתונים יימחקו. פעולה זו אינה הפיכה!')) return;
+
+    this.householdService.deleteHousehold().subscribe({
+      next: (res) => {
+        if (res && res.success) {
+          if (this.shell) this.shell.showToast('המשפחה נמחקה בהצלחה ✓', 'success');
+          this.household.set(res.newHousehold || null);
+          this.showFamilyModal.set(true);
+        }
+      },
+      error: (err) => {
+        if (this.shell) this.shell.showToast('שגיאה במחיקת המשפחה: ' + (err.error?.error || err.message), 'error');
       }
     });
   }

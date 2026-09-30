@@ -33,6 +33,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   private socketSub?: Subscription;
   private socketDeltaSub?: Subscription;
   private householdSocketSub?: Subscription;
+  private householdDeletedSub?: Subscription;
   private routerSub?: Subscription;
   private toastTimer: any;
 
@@ -69,7 +70,29 @@ export class ParentShellComponent implements OnInit, OnDestroy {
     });
 
     this.householdSocketSub = this.socketService.onHouseholdUpdated.subscribe((info) => {
+      const currentUid = this.authService.currentUser?.uid;
+      if (info && currentUid) {
+        const isMember = (info.members || []).includes(currentUid);
+        const isPending = (info.pendingMembers || []).includes(currentUid);
+        const isOwner = info.ownerUid === currentUid;
+        if (!isMember && !isPending && !isOwner) {
+          // User was removed from family!
+          this.showToast('הוסרת ממערכת המשפחה. כעת תוכל ליצור או להצטרף למשפחה חדשה.', 'error');
+          localStorage.removeItem('kids_tasker_household_id');
+          this.householdService.getMyHousehold().subscribe();
+          this.taskService.loadData().subscribe();
+          return;
+        }
+      }
       this.householdService.currentHousehold.set(info);
+      this.taskService.loadData().subscribe();
+    });
+
+    this.householdDeletedSub = this.socketService.onHouseholdDeleted.subscribe(() => {
+      this.showToast('המשפחה נמחקה על ידי מנהל המשפחה.', 'error');
+      localStorage.removeItem('kids_tasker_household_id');
+      this.householdService.getMyHousehold().subscribe();
+      this.taskService.loadData().subscribe();
     });
 
     setInterval(() => {
@@ -81,6 +104,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
     this.socketSub?.unsubscribe();
     this.socketDeltaSub?.unsubscribe();
     this.householdSocketSub?.unsubscribe();
+    this.householdDeletedSub?.unsubscribe();
     this.routerSub?.unsubscribe();
   }
 

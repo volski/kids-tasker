@@ -568,6 +568,51 @@ function transferOwnership(ownerUid, newOwnerUid) {
   return getHouseholdInfo(hId);
 }
 
+function deleteHousehold(ownerUid) {
+  if (!ownerUid) throw new Error('נדרש מזהה משתמש');
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+
+  const hId = mappings[ownerUid] ? mappings[ownerUid].householdId : null;
+  if (!hId || !registry[hId]) {
+    throw new Error('משפחה לא נמצאה');
+  }
+
+  const household = registry[hId];
+  if (household.ownerUid !== ownerUid) {
+    throw new Error('רק מנהל המשפחה יכול למחוק את המשפחה');
+  }
+
+  const affectedUids = new Set([
+    ...(household.members || []),
+    ...(household.pendingMembers || []),
+    ownerUid
+  ]);
+
+  delete registry[hId];
+  writeHouseholdsRegistry(registry);
+
+  affectedUids.forEach(uid => {
+    if (mappings[uid] && mappings[uid].householdId === hId) {
+      delete mappings[uid];
+    }
+  });
+  writeUserMappings(mappings);
+
+  const filePath = path.join(HOUSEHOLDS_DIR, `${hId}.json`);
+  if (fs.existsSync(filePath)) {
+    try { fs.unlinkSync(filePath); } catch (e) {}
+  }
+
+  const ownerEmail = mappings[ownerUid] ? mappings[ownerUid].email : '';
+  const newHouseholdId = getHouseholdIdForUser(ownerUid, ownerEmail);
+  return {
+    deletedHouseholdId: hId,
+    affectedUids: Array.from(affectedUids),
+    newHousehold: getHouseholdInfo(newHouseholdId, ownerUid)
+  };
+}
+
 module.exports = {
   readHouseholdTasks,
   writeHouseholdTasks,
@@ -590,6 +635,7 @@ module.exports = {
   leaveHousehold,
   removeMemberFromHousehold,
   renameHousehold,
-  transferOwnership
+  transferOwnership,
+  deleteHousehold
 };
 

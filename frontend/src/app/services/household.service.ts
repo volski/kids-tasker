@@ -128,4 +128,19 @@ export class HouseholdService {
       })
     );
   }
+
+  deleteHousehold(): Observable<{ success: boolean; newHousehold: HouseholdInfo }> {
+    return this.http.delete<{ success: boolean; newHousehold: HouseholdInfo }>('/api/household').pipe(
+      tap(res => {
+        if (res && res.newHousehold) {
+          this.currentHousehold.set(res.newHousehold);
+          if (res.newHousehold.householdId) {
+            localStorage.setItem('kids_tasker_household_id', res.newHousehold.householdId);
+          } else {
+            localStorage.removeItem('kids_tasker_household_id');
+          }
+        }
+      })
+    );
+  }
 }

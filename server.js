@@ -28,7 +28,8 @@ const {
   leaveHousehold,
   removeMemberFromHousehold,
   renameHousehold,
-  transferOwnership
+  transferOwnership,
+  deleteHousehold
 } = require('./db_manager');
 
 const { getAuth } = require('firebase-admin/auth');
@@ -1547,6 +1548,22 @@ app.post('/api/household/transfer-owner', verifyAuth, requireParentAuth, (req, r
     const info = transferOwnership(uid, newOwnerUid);
     io.to(info.householdId).emit('household_updated', info);
     res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/household', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const uid = req.user ? req.user.uid : null;
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const result = deleteHousehold(uid);
+    io.to(result.deletedHouseholdId).emit('household_deleted', {
+      householdId: result.deletedHouseholdId,
+      message: 'המשפחה נמחקה על ידי מנהל המשפחה'
+    });
+    res.json({ success: true, ...result });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }

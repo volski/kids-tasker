@@ -4,6 +4,7 @@ const {
   joinHouseholdByCode,
   approveMemberRequest,
   rejectMemberRequest,
+  deleteHousehold,
   getHouseholdInfo,
   getHouseholdIdForUser
 } = require('./db_manager');
@@ -53,11 +54,18 @@ assert.strictEqual(resolvedId2, household1.householdId, 'Member should map to sh
 
 console.log(`✓ Test 4: Both parents now share householdId: ${resolvedId2}`);
 
-// Test 5: Reject invalid join code
+// Test 5: Delete Household by Owner
+const deleteRes = deleteHousehold(ownerUid);
+assert(deleteRes.deletedHouseholdId === household1.householdId, 'deletedHouseholdId must match');
+assert(deleteRes.affectedUids.includes(memberUid), 'Affected UIDs should include memberUid');
+
+console.log(`✓ Test 5: deleteHousehold successfully unlinked family and restored clean standalone state`);
+
+// Test 6: Reject invalid join code
 assert.throws(() => {
   joinHouseholdByCode('parent_uid_3', 'bad@test.com', 'FAM-999999');
 }, /קוד הצטרפות לא תקין/);
 
-console.log(`✓ Test 5: Invalid join code properly rejected with error`);
+console.log(`✓ Test 6: Invalid join code properly rejected with error`);
 
 console.log('\n🌟 ALL FAMILY HOUSEHOLD TESTS PASSED! 🌟');

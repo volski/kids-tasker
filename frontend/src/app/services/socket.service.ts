@@ -11,6 +11,7 @@ export class SocketService implements OnDestroy {
   private taskUpdated$ = new Subject<AppData>();
   private taskDelta$ = new Subject<TaskDelta>();
   private householdUpdated$ = new Subject<HouseholdInfo>();
+  private householdDeleted$ = new Subject<any>();
 
   constructor(private injector: Injector) {
     this.socket = io({ transports: ['websocket', 'polling'] });
@@ -34,6 +35,10 @@ export class SocketService implements OnDestroy {
 
     this.socket.on('household_updated', (info: HouseholdInfo) => {
       this.householdUpdated$.next(info);
+    });
+
+    this.socket.on('household_deleted', (data: any) => {
+      this.householdDeleted$.next(data);
     });
 
     this.socket.onAny((event: string, data: any) => {
@@ -70,6 +75,10 @@ export class SocketService implements OnDestroy {
 
   get onHouseholdUpdated(): Observable<HouseholdInfo> {
     return this.householdUpdated$.asObservable();
+  }
+
+  get onHouseholdDeleted(): Observable<any> {
+    return this.householdDeleted$.asObservable();
   }
 
   get connected(): boolean {
