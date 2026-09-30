@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
-import { AppData, Child, Task } from '../models/task.model';
+import { AppData, Child, Task, TaskDelta } from '../models/task.model';
 
 @Injectable({ providedIn: 'root' })
 export class TaskService {
@@ -9,6 +9,40 @@ export class TaskService {
   public fullData = signal<AppData | null>(null);
 
   constructor(private http: HttpClient) {}
+
+  applyTaskDelta(delta: TaskDelta): void {
+    // 1. Update appData (Child[])
+    this.appData.update((children) => {
+      return children.map((c) => {
+        if (c.id !== delta.childId) return c;
+        return {
+          ...c,
+          tasks: c.tasks.map((t) => {
+            if (t.id !== delta.taskId) return t;
+            return { ...t, ...delta.changes };
+          }),
+        };
+      });
+    });
+
+    // 2. Update fullData (AppData)
+    this.fullData.update((full) => {
+      if (!full || !full.children) return full;
+      return {
+        ...full,
+        children: full.children.map((c) => {
+          if (c.id !== delta.childId) return c;
+          return {
+            ...c,
+            tasks: c.tasks.map((t) => {
+              if (t.id !== delta.taskId) return t;
+              return { ...t, ...delta.changes };
+            }),
+          };
+        }),
+      };
+    });
+  }
 
   loadData(): Observable<AppData> {
     return this.http.get<AppData>('/api/tasks').pipe(

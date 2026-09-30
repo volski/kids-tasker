@@ -1,12 +1,13 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
-import { AppData } from '../models/task.model';
+import { AppData, TaskDelta } from '../models/task.model';
 
 @Injectable({ providedIn: 'root' })
 export class SocketService implements OnDestroy {
   private socket: Socket;
   private taskUpdated$ = new Subject<AppData>();
+  private taskDelta$ = new Subject<TaskDelta>();
 
   constructor() {
     this.socket = io({ transports: ['websocket', 'polling'] });
@@ -22,10 +23,18 @@ export class SocketService implements OnDestroy {
     this.socket.on('task_updated', (data: AppData) => {
       this.taskUpdated$.next(data);
     });
+
+    this.socket.on('task_delta', (delta: TaskDelta) => {
+      this.taskDelta$.next(delta);
+    });
   }
 
   get onTaskUpdated(): Observable<AppData> {
     return this.taskUpdated$.asObservable();
+  }
+
+  get onTaskDelta(): Observable<TaskDelta> {
+    return this.taskDelta$.asObservable();
   }
 
   get connected(): boolean {

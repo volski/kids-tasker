@@ -48,6 +48,7 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
   private currentAudio: HTMLAudioElement | null = null;
   private safetyTimer: any = null;
   private socketSub?: Subscription;
+  private socketDeltaSub?: Subscription;
   private toastTimer: any;
   private pullStartY = 0;
   private pulling = false;
@@ -77,6 +78,26 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
       this.cdr.markForCheck();
     });
 
+    this.socketDeltaSub = this.socketService.onTaskDelta.subscribe(delta => {
+      this.data.update(full => {
+        if (!full || !full.children) return full;
+        return {
+          ...full,
+          children: full.children.map(c => {
+            if (c.id !== delta.childId) return c;
+            return {
+              ...c,
+              tasks: c.tasks.map(t => {
+                if (t.id !== delta.taskId) return t;
+                return { ...t, ...delta.changes };
+              })
+            };
+          })
+        };
+      });
+      this.cdr.markForCheck();
+    });
+
     // Connection status
     const checkConn = () => {
       this.isConnected.set(this.socketService.connected);
@@ -87,6 +108,7 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.socketSub?.unsubscribe();
+    this.socketDeltaSub?.unsubscribe();
     this.stopAudio();
   }
 
