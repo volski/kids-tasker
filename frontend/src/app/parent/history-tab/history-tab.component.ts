@@ -2,6 +2,7 @@ import { Component, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ParentShellComponent } from '../parent-shell/parent-shell.component';
+import { authFetch } from '../../core/utils/auth-fetch';
 
 @Component({
   selector: 'app-history-tab',
@@ -27,7 +28,7 @@ export class HistoryTabComponent implements OnInit {
 
   async loadHistoryDates() {
     try {
-      const res = await fetch('/api/history');
+      const res = await authFetch('/api/history');
       const data = await res.json();
       
       const todayStr = new Date().toISOString().split('T')[0];
@@ -55,7 +56,7 @@ export class HistoryTabComponent implements OnInit {
     this.selectedDate.set(date);
     
     try {
-      const res = await fetch(`/api/history?date=${date}`);
+      const res = await authFetch(`/api/history?date=${date}`);
       const data = await res.json();
       this.historyEntries.set(data.history || []);
     } catch (err) {

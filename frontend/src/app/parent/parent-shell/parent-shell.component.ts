@@ -4,6 +4,7 @@ import { RouterModule, Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { SocketService } from '../../services/socket.service';
+import { authFetch } from '../../core/utils/auth-fetch';
 import { TaskService } from '../../services/task.service';
 import { PwaService } from '../../services/pwa.service';
 import { PinModalComponent } from '../../shared/pin-modal/pin-modal.component';
@@ -114,7 +115,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   async executeResetDay() {
     this.showResetConfirm.set(false);
     try {
-      await fetch('/api/tasks/reset-day', { method: 'POST' });
+      await authFetch('/api/tasks/reset-day', { method: 'POST' });
       this.showToast('משימות היום אופסו ליום חדש! כל השמות וההיסטוריה נשמרו ✓', 'success');
     } catch (err: any) {
       this.showToast('שגיאה באיפוס משימות: ' + err.message, 'error');

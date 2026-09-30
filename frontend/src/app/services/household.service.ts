@@ -32,6 +32,7 @@ export class HouseholdService {
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
         }
       })
     );
@@ -42,6 +43,7 @@ export class HouseholdService {
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
         }
       })
     );
@@ -52,6 +54,7 @@ export class HouseholdService {
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
         }
       })
     );
@@ -62,6 +65,7 @@ export class HouseholdService {
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
         }
       })
     );
@@ -72,6 +76,7 @@ export class HouseholdService {
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
         }
       })
     );
@@ -82,6 +87,7 @@ export class HouseholdService {
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
         }
       })
     );
@@ -92,6 +98,7 @@ export class HouseholdService {
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
         }
       })
     );

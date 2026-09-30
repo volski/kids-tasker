@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { TaskService } from '../../services/task.service';
 import { ParentShellComponent } from '../parent-shell/parent-shell.component';
 import { Child, Task, Icon } from '../../models/task.model';
+import { authFetch } from '../../core/utils/auth-fetch';
 
 @Component({
   selector: 'app-manage-tab',
@@ -36,7 +37,7 @@ export class ManageTabComponent implements OnInit {
 
   async loadIcons() {
     try {
-      const res = await fetch('/api/icons');
+      const res = await authFetch('/api/icons');
       this.availableIcons.set(await res.json());
     } catch (err) {
       console.error('Failed to load icons', err);
@@ -52,7 +53,7 @@ export class ManageTabComponent implements OnInit {
     if (!name) return;
 
     try {
-      const res = await fetch('/api/children', {
+      const res = await authFetch('/api/children', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -71,7 +72,7 @@ export class ManageTabComponent implements OnInit {
     if (!name) return;
 
     try {
-      const res = await fetch(`/api/children/${child.id}`, {
+      const res = await authFetch(`/api/children/${child.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name })
@@ -97,7 +98,7 @@ export class ManageTabComponent implements OnInit {
     this.showDeleteChildModal.set(null);
     try {
 
-      const res = await fetch(`/api/children/${child.id}`, {
+      const res = await authFetch(`/api/children/${child.id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete child');
@@ -114,7 +115,7 @@ export class ManageTabComponent implements OnInit {
     if (!formValues.title) return;
 
     try {
-      const res = await fetch(`/api/children/${childId}/tasks`, {
+      const res = await authFetch(`/api/children/${childId}/tasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formValues)
@@ -137,7 +138,7 @@ export class ManageTabComponent implements OnInit {
 
     this.savingTasks.add(taskId);
     try {
-      const res = await fetch(`/api/children/${childId}/tasks/${taskId}`, {
+      const res = await authFetch(`/api/children/${childId}/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch)
@@ -168,7 +169,7 @@ export class ManageTabComponent implements OnInit {
     this.showDeleteTaskModal.set(null);
     try {
 
-      const res = await fetch(`/api/children/${childId}/tasks/${task.id}`, {
+      const res = await authFetch(`/api/children/${childId}/tasks/${task.id}`, {
         method: 'DELETE'
       });
       if (!res.ok) throw new Error('Failed to delete task');
@@ -223,7 +224,7 @@ export class ManageTabComponent implements OnInit {
     child.tasks = tasksArray;
 
     try {
-      const res = await fetch(`/api/children/${child.id}/tasks/reorder`, {
+      const res = await authFetch(`/api/children/${child.id}/tasks/reorder`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskIds })

@@ -2,6 +2,7 @@ import { Component, OnInit, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TaskService } from '../../services/task.service';
 import { ParentShellComponent } from '../parent-shell/parent-shell.component';
+import { authFetch } from '../../core/utils/auth-fetch';
 
 @Component({
   selector: 'app-status-tab',
@@ -71,7 +72,7 @@ export class StatusTabComponent implements OnInit {
 
   async toggleTaskFromParent(childId: string, taskId: string) {
     try {
-      await fetch('/api/tasks/toggle', {
+      await authFetch('/api/tasks/toggle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ childId, taskId, isParent: true })
@@ -84,7 +85,7 @@ export class StatusTabComponent implements OnInit {
 
   async handleApproveTask(childId: string, taskId: string) {
     try {
-      const res = await fetch('/api/tasks/approve', {
+      const res = await authFetch('/api/tasks/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ childId, taskId })

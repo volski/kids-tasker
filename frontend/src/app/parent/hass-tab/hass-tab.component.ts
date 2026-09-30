@@ -5,6 +5,7 @@ import { Subscription } from 'rxjs';
 import { HassService } from '../../services/hass.service';
 import { SocketService } from '../../services/socket.service';
 import { ParentShellComponent } from '../parent-shell/parent-shell.component';
+import { authFetch } from '../../core/utils/auth-fetch';
 
 @Component({
   selector: 'app-hass-tab',
@@ -61,7 +62,7 @@ export class HassTabComponent implements OnInit, OnDestroy {
 
   async loadConfig() {
     try {
-      const res = await fetch('/api/hass/config');
+      const res = await authFetch('/api/hass/config');
       const data = await res.json();
       this.config.set({
         enabled: Boolean(data.enabled),
@@ -85,7 +86,7 @@ export class HassTabComponent implements OnInit, OnDestroy {
 
   async loadYaml() {
     try {
-      const res = await fetch('/api/hass/card-yaml');
+      const res = await authFetch('/api/hass/card-yaml');
       const data = await res.json();
       if (data.success && data.yaml) {
         this.yamlCode.set(data.yaml);
@@ -107,7 +108,7 @@ export class HassTabComponent implements OnInit, OnDestroy {
         autoBlockTv: cfg.autoBlockTv
       };
       
-      const res = await fetch('/api/hass/config', {
+      const res = await authFetch('/api/hass/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -133,7 +134,7 @@ export class HassTabComponent implements OnInit, OnDestroy {
     const cfg = this.config();
     
     try {
-      const res = await fetch('/api/hass/test', {
+      const res = await authFetch('/api/hass/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: cfg.url, token: cfg.token || cfg.tokenMasked, tvEntityId: cfg.tvEntityId })
@@ -156,7 +157,7 @@ export class HassTabComponent implements OnInit, OnDestroy {
   async createEntities() {
     this.isCreating.set(true);
     try {
-      const res = await fetch('/api/hass/create-entities', { method: 'POST' });
+      const res = await authFetch('/api/hass/create-entities', { method: 'POST' });
       const data = await res.json();
       
       this.showEntitiesFeedback.set(true);
@@ -190,7 +191,7 @@ export class HassTabComponent implements OnInit, OnDestroy {
   async addLovelaceCard() {
     this.isAddingCard.set(true);
     try {
-      const res = await fetch('/api/hass/add-card', { method: 'POST' });
+      const res = await authFetch('/api/hass/add-card', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         this.shell.showToast('הכרטיס נוסף בהצלחה ל-Home Assistant! 🎉');

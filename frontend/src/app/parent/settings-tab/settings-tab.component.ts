@@ -5,6 +5,7 @@ import { SettingsService } from '../../services/settings.service';
 import { TaskService } from '../../services/task.service';
 import { AudioService } from '../../services/audio.service';
 import { ParentShellComponent } from '../parent-shell/parent-shell.component';
+import { authFetch } from '../../core/utils/auth-fetch';
 
 @Component({
   selector: 'app-settings-tab',
@@ -123,7 +124,7 @@ export class SettingsTabComponent implements OnInit {
     const reader = new FileReader();
     reader.onload = async (e: any) => {
       try {
-        const res = await fetch('/api/sounds/upload', {
+        const res = await authFetch('/api/sounds/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: file.name, base64: e.target.result })

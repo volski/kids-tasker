@@ -15,6 +15,8 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
       const isParentUnlocked = sessionStorage.getItem('kids_tasker_parent_unlocked') === '1';
 
+      const householdId = localStorage.getItem('kids_tasker_household_id');
+
       if (idToken) {
         headers = headers.set('Authorization', `Bearer ${idToken}`);
       } else if (deviceToken) {
@@ -23,6 +25,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
       if (isParentUnlocked) {
         headers = headers.set('X-Parent-Unlocked', '1');
+      }
+
+      if (householdId) {
+        headers = headers.set('X-Household-Id', householdId);
       }
 
       const cloned = req.clone({ headers });
