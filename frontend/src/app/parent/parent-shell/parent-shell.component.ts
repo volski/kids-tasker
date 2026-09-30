@@ -25,6 +25,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   toastType = signal<'success' | 'error'>('success');
   
   private socketSub?: Subscription;
+  private socketDeltaSub?: Subscription;
   private routerSub?: Subscription;
   private toastTimer: any;
 
@@ -52,6 +53,10 @@ export class ParentShellComponent implements OnInit, OnDestroy {
       this.taskService.appData.set(data.children || []);
     });
 
+    this.socketDeltaSub = this.socketService.onTaskDelta.subscribe((delta) => {
+      this.taskService.applyTaskDelta(delta);
+    });
+
     setInterval(() => {
       this.isConnected.set(this.socketService.connected);
     }, 1000);
@@ -59,6 +64,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.socketSub?.unsubscribe();
+    this.socketDeltaSub?.unsubscribe();
     this.routerSub?.unsubscribe();
   }
 

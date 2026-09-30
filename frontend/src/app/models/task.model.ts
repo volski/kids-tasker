@@ -10,6 +10,12 @@ export interface Task {
   enabled: boolean;
 }
 
+export interface TaskDelta {
+  childId: string;
+  taskId: string;
+  changes: Partial<Task>;
+}
+
 export interface Child {
   id: string;
   name: string;
