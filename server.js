@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
@@ -5,6 +6,21 @@ const crypto = require('crypto');
 const express = require('express');
 const { Server } = require('socket.io');
 const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+
+const {
+  readHouseholdTasks,
+  writeHouseholdTasks,
+  readDevices,
+  writeDevices,
+  getDeviceByToken,
+  getHouseholdDevices,
+  initPairingSession,
+  pairDevice,
+  revokeDevice,
+  readPairingSessions
+} = require('./db_manager');
+
+const { verifyAuth, requireParentAuth } = require('./auth_middleware');
 
 // WebSocket client support across all Node.js versions (including Node 20 LTS on Proxmox/Debian)
 const WebSocket = (() => {
@@ -407,56 +423,21 @@ function initTasksStorage() {
   }
 }
 
-function readTasks() {
+function readTasks(householdId = 'house_default') {
   try {
-    if (!fs.existsSync(DB_TASKS)) {
-      initTasksStorage();
-    }
-    
-    let tData = { children: [], lastActiveDate: getTodayDateString() };
-    let hData = [];
-    let cData = { homeAssistant: { ...DEFAULT_HASS_CONFIG }, parentPin: null };
-    let sData = {};
-
-    try { tData = JSON.parse(fs.readFileSync(DB_TASKS, 'utf-8')); } catch(e) {}
-    try { hData = JSON.parse(fs.readFileSync(DB_HISTORY, 'utf-8')); } catch(e) {}
-    try { cData = JSON.parse(fs.readFileSync(DB_CONFIG, 'utf-8')); } catch(e) {}
-    try { sData = JSON.parse(fs.readFileSync(DB_SETTINGS, 'utf-8')); } catch(e) {}
-
-    const combined = {
-      children: tData.children || [],
-      lastActiveDate: tData.lastActiveDate || getTodayDateString(),
-      history: Array.isArray(hData) ? hData : [],
-      homeAssistant: cData.homeAssistant || { ...DEFAULT_HASS_CONFIG },
-      parentPin: cData.parentPin || null,
-      settings: sData || {}
-    };
-
-    return normalizeTasksData(combined);
+    const rawData = readHouseholdTasks(householdId, DEFAULT_TASKS_DATA);
+    return normalizeTasksData(rawData);
   } catch (error) {
-    console.error(`[Storage Error] Reading DB:`, error);
+    console.error(`[Storage Error] Reading DB for household ${householdId}:`, error);
     return normalizeTasksData(DEFAULT_TASKS_DATA);
   }
 }
 
-function writeTasks(data) {
+function writeTasks(data, householdId = 'house_default') {
   try {
-    if (!fs.existsSync(DB_DIR)) {
-      fs.mkdirSync(DB_DIR, { recursive: true });
-    }
-    
-    const tData = { children: data.children || [], lastActiveDate: data.lastActiveDate || getTodayDateString() };
-    const hData = data.history || [];
-    const cData = { homeAssistant: data.homeAssistant || { ...DEFAULT_HASS_CONFIG }, parentPin: data.parentPin || null };
-    const sData = data.settings || {};
-
-    fs.writeFileSync(DB_TASKS, JSON.stringify(tData, null, 2), 'utf-8');
-    fs.writeFileSync(DB_HISTORY, JSON.stringify(hData, null, 2), 'utf-8');
-    fs.writeFileSync(DB_CONFIG, JSON.stringify(cData, null, 2), 'utf-8');
-    fs.writeFileSync(DB_SETTINGS, JSON.stringify(sData, null, 2), 'utf-8');
-    
+    writeHouseholdTasks(householdId, data);
   } catch (error) {
-    console.error(`[Storage Error] Writing DB:`, error);
+    console.error(`[Storage Error] Writing DB for household ${householdId}:`, error);
   }
 }
 
@@ -1257,6 +1238,88 @@ app.get('/api/tts', async (req, res) => {
   } catch (err) {
     console.error('[TTS] Generation failed:', err);
     res.status(500).json({ error: 'TTS generation failed' });
+  }
+});
+
+// --- Device Pairing API Endpoints ---
+app.post('/api/devices/init-pairing', (req, res) => {
+  try {
+    const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    const session = initPairingSession(ip, userAgent);
+    res.json({
+      success: true,
+      sessionId: session.sessionId,
+      deviceId: session.deviceId,
+      code: session.code,
+      expiresAt: session.expiresAt
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/devices/pairing-status', (req, res) => {
+  try {
+    const { sessionId } = req.query;
+    if (!sessionId) return res.status(400).json({ paired: false, error: 'Missing sessionId' });
+    const sessions = readPairingSessions();
+    const sess = sessions[sessionId];
+    if (!sess) return res.status(404).json({ paired: false, error: 'Session not found' });
+    if (sess.status === 'paired') {
+      return res.json({ paired: true, deviceToken: sess.deviceToken, householdId: sess.householdId });
+    }
+    res.json({ paired: false, status: sess.status });
+  } catch (err) {
+    res.status(500).json({ paired: false, error: err.message });
+  }
+});
+
+app.post('/api/devices/pair', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const { code, deviceName } = req.body;
+    if (!code) return res.status(400).json({ success: false, error: 'Missing pairing code' });
+    const result = pairDevice(code, req.householdId, deviceName);
+
+    // Emit socket event for instantaneous pairing on TV
+    io.emit(`device_paired_${result.sessionId}`, {
+      success: true,
+      deviceToken: result.deviceToken,
+      householdId: result.householdId,
+      deviceName: result.deviceName
+    });
+
+    res.json({ success: true, device: result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/devices/allowed', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const devices = getHouseholdDevices(req.householdId);
+    res.json({ success: true, devices });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/devices/revoke', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    if (!deviceId) return res.status(400).json({ success: false, error: 'Missing deviceId' });
+    const revoked = revokeDevice(deviceId, req.householdId);
+
+    // Emit socket event to force TV to clear token and return to QR screen
+    io.emit(`device_revoked_${deviceId}`, {
+      success: true,
+      deviceId,
+      message: 'Device authorization revoked'
+    });
+
+    res.json({ success: true, revoked });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
   }
 });
 

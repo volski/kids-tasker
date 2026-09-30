@@ -4,6 +4,18 @@ import { KidsBoardComponent } from './kids-board/kids-board.component';
 export const routes: Routes = [
   { path: '', component: KidsBoardComponent },
   { 
+    path: 'login', 
+    loadComponent: () => import('./auth/login/login.component').then(m => m.LoginComponent) 
+  },
+  { 
+    path: 'pair', 
+    loadComponent: () => import('./auth/login/login.component').then(m => m.LoginComponent) 
+  },
+  { 
+    path: 'pairing', 
+    loadComponent: () => import('./device-pairing/device-pairing.component').then(m => m.DevicePairingComponent) 
+  },
+  { 
     path: 'parent', 
     loadComponent: () => import('./parent/parent-shell/parent-shell.component').then(m => m.ParentShellComponent),
     children: [
@@ -12,7 +24,8 @@ export const routes: Routes = [
       { path: 'manage', loadComponent: () => import('./parent/manage-tab/manage-tab.component').then(m => m.ManageTabComponent) },
       { path: 'history', loadComponent: () => import('./parent/history-tab/history-tab.component').then(m => m.HistoryTabComponent) },
       { path: 'hass', loadComponent: () => import('./parent/hass-tab/hass-tab.component').then(m => m.HassTabComponent) },
-      { path: 'settings', loadComponent: () => import('./parent/settings-tab/settings-tab.component').then(m => m.SettingsTabComponent) }
+      { path: 'settings', loadComponent: () => import('./parent/settings-tab/settings-tab.component').then(m => m.SettingsTabComponent) },
+      { path: 'devices', loadComponent: () => import('./parent/devices-tab/devices-tab.component').then(m => m.DevicesTabComponent) }
     ]
   },
   { path: '**', redirectTo: '' }

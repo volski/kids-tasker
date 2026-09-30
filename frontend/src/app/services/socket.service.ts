@@ -47,6 +47,14 @@ export class SocketService implements OnDestroy {
     }
   }
 
+  on(event: string, callback: (data: any) => void): void {
+    this.socket.on(event, callback);
+  }
+
+  off(event: string, callback?: (data: any) => void): void {
+    this.socket.off(event, callback);
+  }
+
   ngOnDestroy(): void {
     this.socket.disconnect();
     this.taskUpdated$.complete();

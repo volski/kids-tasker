@@ -11,10 +11,11 @@ async function runFullE2ETestSuite() {
   console.log('====================================================\n');
 
   // Step 1: Run Server Unit & Integration Tests
-  console.log('--- Step 1: Running Server Integration Tests (test_server.js) ---');
+  console.log('--- Step 1: Running Server Integration & Firebase Pairing Tests ---');
   try {
+    execSync('node test_firebase_pairing.js', { stdio: 'inherit', cwd: __dirname });
     execSync('node test_server.js', { stdio: 'inherit', cwd: __dirname });
-    console.log('✓ Server unit tests passed cleanly.\n');
+    console.log('✓ Server unit & pairing tests passed cleanly.\n');
   } catch (err) {
     console.error('❌ Step 1 Failed: Server unit tests emitted errors.');
     process.exit(1);
