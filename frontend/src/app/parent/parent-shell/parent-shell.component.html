@@ -18,12 +18,12 @@
       <div class="flex items-center gap-2 sm:gap-3">
         <button (click)="promptResetDay()" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/50 shadow-sm transition flex items-center gap-1.5" title="איפוס משימות להיום בלבד - שומר את כל שמות הילדים וההיסטוריה!">
           <span>🔄</span>
-          <span>איפוס ליום חדש</span>
+          <span class="hidden sm:inline">איפוס ליום חדש</span>
         </button>
 
         <a routerLink="/" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-sm transition flex items-center gap-1.5">
           <span>📱</span>
-          <span>לוח ילדים (טאבלט)</span>
+          <span class="hidden sm:inline">לוח ילדים</span>
         </a>
 
         <!-- Install App (Android/Chrome/Edge: native prompt) -->
