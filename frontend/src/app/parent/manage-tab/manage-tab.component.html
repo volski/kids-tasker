@@ -1,0 +1,253 @@
+<div class="space-y-8">
+  
+  <!-- Add Child Card -->
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+    <h3 class="text-xl font-black text-white mb-4 flex items-center gap-2">
+      <span>➕</span>
+      <span>הוספת ילד/ה חדש/ה</span>
+    </h3>
+    <form (submit)="handleCreateChild(); $event.preventDefault()" class="flex flex-wrap sm:flex-nowrap gap-3">
+      <input 
+        type="text" 
+        [(ngModel)]="newChildName"
+        name="newChildName"
+        placeholder="שם הילד/ה (לדוגמה: איתמר)" 
+        required
+        class="flex-1 px-4 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
+      >
+      <button type="submit" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg transition whitespace-nowrap">
+        הוסף ילד/ה
+      </button>
+    </form>
+  </div>
+
+  <!-- List of Children with their Tasks -->
+  <div class="space-y-6">
+    @if (children().length === 0) {
+      <div class="text-center py-12 text-slate-500 font-bold">אין ילדים מוגדרים עדיין</div>
+    }
+
+    @for (child of children(); track child.id) {
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+        
+        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-3 flex-1 min-w-[200px]">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-xl font-bold text-white shadow-md">
+              {{ child.name.charAt(0) }}
+            </div>
+            <div class="flex-1">
+              <form (submit)="handleUpdateChild(child); $event.preventDefault()" class="flex items-center gap-2">
+                <input 
+                  type="text" 
+                  [(ngModel)]="child.name"
+                  name="childName"
+                  (blur)="handleUpdateChild(child, true)"
+                  class="bg-slate-950 border border-slate-700 text-white font-extrabold text-xl px-3 py-1.5 rounded-xl focus:ring-2 focus:ring-indigo-500 max-w-xs transition"
+                  title="לחץ Enter או לחץ מחוץ לתיבה לשמירה אוטומטית לקובץ"
+                >
+                <button type="submit" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-1">
+                  <span>שמור</span>
+                  <span>💾</span>
+                </button>
+              </form>
+              <span class="text-xs text-slate-500 font-semibold mt-1 block">{{ child.tasks.length }} משימות מוגדרות</span>
+            </div>
+          </div>
+
+          <div>
+            <button (click)="promptDeleteChild(child)" class="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 rounded-xl text-xs font-bold transition">
+              מחק ילד/ה 🗑️
+            </button>
+          </div>
+        </div>
+
+        <!-- Add Task Form -->
+        <form #addTaskForm="ngForm" (submit)="handleAddTask(child.id, $event, addTaskForm.value)" class="bg-slate-950/80 border border-slate-800 rounded-2xl p-3.5 space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4 relative overflow-visible">
+          <div class="absolute -top-3 right-4 bg-slate-950 px-2 flex items-center gap-1 text-[10px] font-black text-slate-400 tracking-wider">
+            <span>➕</span>
+            <span>משימה חדשה</span>
+          </div>
+          
+          <div class="flex items-center gap-3 flex-1 min-w-0 pt-1 md:pt-0">
+            <select 
+              name="icon"
+              ngModel="star"
+              class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-shrink-0"
+            >
+              <option value="none">⬜ ללא אייקון</option>
+              @for (ic of availableIcons(); track ic.id) {
+                <option [value]="ic.id">{{ ic.emoji }} {{ ic.name }}</option>
+              }
+            </select>
+            <input 
+              type="text" 
+              name="title"
+              ngModel
+              placeholder="שם המשימה (למשל: סידור חדר)..." 
+              required
+              class="bg-slate-900/60 border border-slate-800 focus:border-indigo-500 text-white font-bold text-sm px-3 py-1.5 rounded-xl flex-1 focus:outline-none transition min-w-[120px] placeholder-slate-500"
+            >
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between xl:justify-end gap-2.5 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800/80 flex-shrink-0 w-full md:w-auto">
+            <div class="flex flex-wrap items-center gap-2">
+              <select 
+                name="audioFeedback"
+                ngModel=""
+                class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36 sm:w-44"
+              >
+                <option value="">(ללא צליל)</option>
+                <optgroup label="ספריית קולות">
+                  @for (preset of getAudioOptions(); track preset.id || preset.value) {
+                    <option [value]="preset.value">{{ preset.type === 'audio' ? '🎵' : '🗣️' }} {{ preset.name || preset.value }}</option>
+                  }
+                </optgroup>
+              </select>
+
+              <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none">
+                <input type="checkbox" name="requiresApproval" ngModel="false" class="w-4 h-4 rounded accent-indigo-600">
+                <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+              </label>
+
+              <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none">
+                <input type="checkbox" name="enabled" ngModel="true" class="w-4 h-4 rounded accent-indigo-600">
+                <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">פעיל ✅</span>
+              </label>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow active:scale-95 flex-shrink-0">
+                <span>➕</span>
+                <span>הוסף</span>
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <!-- Task List -->
+        <div class="space-y-2.5">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">רשימת משימות <span class="text-slate-600 font-normal normal-case">(גרור לשינוי סדר)</span></h4>
+          
+          <div class="space-y-2.5" (dragover)="$event.preventDefault()" (drop)="onDrop($event, child)">
+            @if (child.tasks.length === 0) {
+              <p class="text-sm text-slate-500 py-3 text-center bg-slate-950/40 rounded-2xl border border-slate-800/60">אין משימות עדיין. הוסף משימה חדשה למעלה.</p>
+            }
+
+            @for (task of child.tasks; track task.id; let i = $index) {
+              <div
+                class="bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5 transition-all hover:border-slate-700 space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4 cursor-grab active:cursor-grabbing"
+                [class.border-indigo-400]="dragState?.childId === child.id && dragState?.targetIdx === i"
+                draggable="true"
+                (dragstart)="onDragStart($event, child.id, task.id, i)"
+                (dragend)="onDragEnd($event)"
+                (dragover)="onDragOver($event, child.id, i)"
+              >
+                <!-- Part 1: Drag + Icon + Title -->
+                <div class="flex items-center gap-3 flex-1 min-w-0">
+                  <span class="text-slate-600 hover:text-slate-400 select-none flex-shrink-0 cursor-grab text-lg leading-none" title="גרור לשינוי סדר">⠿</span>
+
+                  <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 p-1 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-inner">
+                    @if (!task.icon || task.icon === 'none') {
+                      <div class="w-full h-full"></div>
+                    } @else {
+                      <img [src]="'/icons/' + task.icon + '.svg'" alt="" class="w-full h-full object-contain" (error)="task.icon='none'">
+                    }
+                  </div>
+
+                  <select
+                    [(ngModel)]="task.icon"
+                     (change)="handleUpdateTask(child.id, task.id, { icon: task.icon }, true)"
+                    class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-shrink-0"
+                  >
+                    <option value="none">⬜ ללא אייקון</option>
+                    @for (ic of availableIcons(); track ic.id) {
+                      <option [value]="ic.id">{{ ic.emoji }} {{ ic.name }}</option>
+                    }
+                  </select>
+
+                  <input
+                    type="text"
+                    [(ngModel)]="task.title"
+                     (blur)="handleUpdateTask(child.id, task.id, { title: task.title }, true)"
+                     (keyup.enter)="handleUpdateTask(child.id, task.id, { title: task.title })"
+                    class="bg-slate-900/60 border border-slate-800 focus:border-indigo-500 text-white font-bold text-sm px-3 py-1.5 rounded-xl flex-1 focus:outline-none transition min-w-[120px]"
+                  >
+                </div>
+
+                <!-- Part 2: Actions -->
+                <div class="flex flex-wrap items-center justify-between xl:justify-end gap-2.5 pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-800/80 flex-shrink-0 w-full md:w-auto">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <select
+                      [(ngModel)]="task.audioFeedback"
+                       (change)="handleUpdateTask(child.id, task.id, { audioFeedback: task.audioFeedback }, true)"
+                      class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36 sm:w-44"
+                    >
+                      <option value="">(ללא צליל)</option>
+                      <optgroup label="ספריית קולות">
+                        @for (preset of getAudioOptions(); track preset.id || preset.value) {
+                          <option [value]="preset.value">{{ preset.type === 'audio' ? '🎵' : '🗣️' }} {{ preset.name || preset.value }}</option>
+                        }
+                      </optgroup>
+                    </select>
+
+                    <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none">
+                      <input 
+                        type="checkbox" 
+                        [(ngModel)]="task.requiresApproval"
+                         (change)="handleUpdateTask(child.id, task.id, { requiresApproval: task.requiresApproval }, true)"
+                        class="w-4 h-4 rounded accent-indigo-600"
+                      >
+                      <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
+                    </label>
+
+                    <label class="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-xl cursor-pointer hover:bg-slate-850 transition select-none">
+                      <input 
+                        type="checkbox" 
+                        [(ngModel)]="task.enabled"
+                         (change)="handleUpdateTask(child.id, task.id, { enabled: task.enabled }, true)"
+                        class="w-4 h-4 rounded accent-indigo-600"
+                      >
+                      <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">פעיל ✅</span>
+                    </label>
+                  </div>
+
+                  <div class="flex items-center gap-1.5">
+                    <button  (click)="handleUpdateTask(child.id, task.id, { title: task.title, icon: task.icon, requiresApproval: task.requiresApproval, audioFeedback: task.audioFeedback, enabled: task.enabled })" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow active:scale-95">
+                      <span>💾</span>
+                    </button>
+                    @if (savingTasks.has(task.id)) {
+                      <span class="text-xs font-bold text-emerald-400">✓</span>
+                    }
+                    <button (click)="promptDeleteTask(child.id, task)" class="p-1.5 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-bold transition active:scale-95" title="מחק משימה">
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>
+
+@if (showDeleteChildModal()) {
+  <app-confirm-modal
+    [title]="'מחיקת משתמש'"
+    [message]="'האם אתה בטוח שברצונך למחוק את ' + showDeleteChildModal()?.name + '? (כל המשימות יימחקו)'"
+    confirmText="מחק משתמש"
+    (onConfirm)="handleDeleteChild(showDeleteChildModal()!)"
+    (onCancel)="showDeleteChildModal.set(null)">
+  </app-confirm-modal>
+}
+
+@if (showDeleteTaskModal()) {
+  <app-confirm-modal
+    [title]="'מחיקת משימה'"
+    [message]="'האם אתה בטוח שברצונך למחוק את המשימה \'' + showDeleteTaskModal()?.task?.title + '\'? (הפעולה לא הפיכה)'"
+    confirmText="מחק משימה"
+    (onConfirm)="handleDeleteTask(showDeleteTaskModal()!.childId, showDeleteTaskModal()!.task)"
+    (onCancel)="showDeleteTaskModal.set(null)">
+  </app-confirm-modal>
+}
