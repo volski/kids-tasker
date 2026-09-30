@@ -2,6 +2,8 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { HouseholdService, HouseholdInfo } from '../../services/household.service';
+import { FamilyOnboardingComponent } from '../../family-onboarding/family-onboarding.component';
 
 export interface AllowedDevice {
   deviceId: string;
@@ -17,10 +19,49 @@ export interface AllowedDevice {
 @Component({
   selector: 'app-devices-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, FamilyOnboardingComponent],
   template: `
     <div class="space-y-6">
       
+      <!-- Family Group Banner -->
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-800/40 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 bg-indigo-600/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center text-2xl">
+              🏠
+            </div>
+            <div>
+              <h2 class="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                <span>{{ household()?.name || 'המשפחה שלי' }}</span>
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">קבוצה משפחתית משותפת להורים</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <div class="bg-slate-950 px-4 py-2 rounded-2xl border border-indigo-500/40 flex items-center gap-2">
+              <span class="text-xs text-slate-400 font-semibold">קוד הצטרפות להורים:</span>
+              <span class="text-base font-extrabold text-amber-400 font-mono tracking-wider">{{ household()?.joinCode || 'FAM-....' }}</span>
+            </div>
+
+            <button (click)="showFamilyModal.set(true)" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition border border-slate-700">
+              ⚙️ ניהול משפחה
+            </button>
+          </div>
+        </div>
+
+        @if (household()?.memberProfiles?.length) {
+          <div class="flex items-center gap-2 pt-2 border-t border-slate-800/60 text-xs text-slate-400">
+            <span class="font-semibold text-slate-300">הורים מחוברים:</span>
+            @for (m of household()?.memberProfiles; track m.uid) {
+              <span class="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 font-medium">
+                👤 {{ m.name || m.email }}
+              </span>
+            }
+          </div>
+        }
+      </div>
+
       <!-- Top Banner & Manual Pairing Button -->
       <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -139,16 +180,24 @@ export interface AllowedDevice {
         </div>
       }
 
+      <!-- Family Onboarding Modal -->
+      @if (showFamilyModal()) {
+        <app-family-onboarding (completed)="onFamilyCompleted($event)"></app-family-onboarding>
+      }
+
     </div>
   `
 })
 export class DevicesTabComponent implements OnInit {
   private http = inject(HttpClient);
+  private householdService = inject(HouseholdService);
 
+  public household = signal<HouseholdInfo | null>(null);
   public devices = signal<AllowedDevice[]>([]);
   public isLoading = signal<boolean>(true);
   public isRevoking = signal<string | null>(null);
   public showPairModal = signal<boolean>(false);
+  public showFamilyModal = signal<boolean>(false);
   public isSubmittingModal = signal<boolean>(false);
   public modalError = signal<string | null>(null);
 
@@ -156,6 +205,23 @@ export class DevicesTabComponent implements OnInit {
   public inputName = 'מסך חדש';
 
   ngOnInit() {
+    this.loadHousehold();
+    this.loadDevices();
+  }
+
+  public loadHousehold() {
+    this.householdService.getMyHousehold().subscribe({
+      next: (res) => {
+        if (res && res.household) {
+          this.household.set(res.household);
+        }
+      }
+    });
+  }
+
+  public onFamilyCompleted(info: HouseholdInfo) {
+    this.household.set(info);
+    this.showFamilyModal.set(false);
     this.loadDevices();
   }
 

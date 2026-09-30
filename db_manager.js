@@ -6,6 +6,8 @@ const DB_DIR = process.env.DB_DIR || (process.env.TASKS_FILE ? path.dirname(proc
 const HOUSEHOLDS_DIR = path.join(DB_DIR, 'households');
 const DEVICES_FILE = path.join(DB_DIR, 'devices.json');
 const PAIRING_FILE = path.join(DB_DIR, 'pairing_sessions.json');
+const HOUSEHOLDS_REGISTRY_FILE = path.join(DB_DIR, 'households_registry.json');
+const USER_MAPPINGS_FILE = path.join(DB_DIR, 'user_mappings.json');
 
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 if (!fs.existsSync(HOUSEHOLDS_DIR)) fs.mkdirSync(HOUSEHOLDS_DIR, { recursive: true });
@@ -208,6 +210,163 @@ function revokeDevice(deviceId, householdId) {
   return dev;
 }
 
+// ---- Household Registry & Multi-Parent Mapping ----
+function readHouseholdsRegistry() {
+  return readJsonFile(HOUSEHOLDS_REGISTRY_FILE, {});
+}
+
+function writeHouseholdsRegistry(registry) {
+  writeJsonFile(HOUSEHOLDS_REGISTRY_FILE, registry);
+}
+
+function readUserMappings() {
+  return readJsonFile(USER_MAPPINGS_FILE, {});
+}
+
+function writeUserMappings(mappings) {
+  writeJsonFile(USER_MAPPINGS_FILE, mappings);
+}
+
+function generateFamilyJoinCode() {
+  const registry = readHouseholdsRegistry();
+  const existingCodes = new Set(Object.values(registry).map(h => (h.joinCode || '').toUpperCase()));
+  let code;
+  do {
+    const num = Math.floor(1000 + Math.random() * 9000);
+    code = `FAM-${num}`;
+  } while (existingCodes.has(code));
+  return code;
+}
+
+function getHouseholdIdForUser(uid, email = '') {
+  if (!uid) return 'house_default';
+  const mappings = readUserMappings();
+  if (mappings[uid] && mappings[uid].householdId) {
+    return mappings[uid].householdId;
+  }
+
+  const registry = readHouseholdsRegistry();
+  const householdId = registry[uid] ? uid : uid;
+  const joinCode = generateFamilyJoinCode();
+  const emailPrefix = email ? email.split('@')[0] : 'משפחה';
+
+  if (!registry[householdId]) {
+    registry[householdId] = {
+      householdId,
+      name: `משפחת ${emailPrefix}`,
+      joinCode,
+      ownerUid: uid,
+      createdAt: new Date().toISOString(),
+      members: [uid]
+    };
+    writeHouseholdsRegistry(registry);
+  }
+
+  mappings[uid] = {
+    uid,
+    email: email || '',
+    householdId,
+    joinedAt: new Date().toISOString()
+  };
+  writeUserMappings(mappings);
+
+  return householdId;
+}
+
+function getHouseholdInfo(householdId) {
+  if (!householdId) return null;
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+  const household = registry[householdId];
+  if (!household) {
+    return null;
+  }
+  const memberProfiles = (household.members || []).map(mUid => {
+    const map = mappings[mUid] || {};
+    return {
+      uid: mUid,
+      email: map.email || '',
+      name: map.name || (map.email ? map.email.split('@')[0] : mUid)
+    };
+  });
+
+  return {
+    householdId: household.householdId,
+    name: household.name || 'המשפחה שלי',
+    joinCode: household.joinCode,
+    ownerUid: household.ownerUid,
+    createdAt: household.createdAt,
+    members: household.members || [],
+    memberProfiles
+  };
+}
+
+function createHousehold(ownerUid, ownerEmail, familyName) {
+  if (!ownerUid) throw new Error('נדרש מזהה משתמש');
+  const safeName = (familyName || '').trim() || 'המשפחה שלי';
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+
+  const householdId = `house_${crypto.randomBytes(6).toString('hex')}`;
+  const joinCode = generateFamilyJoinCode();
+
+  registry[householdId] = {
+    householdId,
+    name: safeName,
+    joinCode,
+    ownerUid,
+    createdAt: new Date().toISOString(),
+    members: [ownerUid]
+  };
+  writeHouseholdsRegistry(registry);
+
+  mappings[ownerUid] = {
+    uid: ownerUid,
+    email: ownerEmail || '',
+    householdId,
+    joinedAt: new Date().toISOString()
+  };
+  writeUserMappings(mappings);
+
+  return getHouseholdInfo(householdId);
+}
+
+function joinHouseholdByCode(userUid, userEmail, inputCode) {
+  if (!userUid) throw new Error('נדרש מזהה משתמש');
+  const code = (inputCode || '').trim().toUpperCase();
+  if (!code) throw new Error('נא להזין קוד הצטרפות');
+
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+
+  let targetHousehold = null;
+  for (const h of Object.values(registry)) {
+    if ((h.joinCode || '').toUpperCase() === code) {
+      targetHousehold = h;
+      break;
+    }
+  }
+
+  if (!targetHousehold) {
+    throw new Error('קוד הצטרפות לא תקין. בדוק את הקוד ונסה שוב.');
+  }
+
+  if (!targetHousehold.members.includes(userUid)) {
+    targetHousehold.members.push(userUid);
+    writeHouseholdsRegistry(registry);
+  }
+
+  mappings[userUid] = {
+    uid: userUid,
+    email: userEmail || '',
+    householdId: targetHousehold.householdId,
+    joinedAt: new Date().toISOString()
+  };
+  writeUserMappings(mappings);
+
+  return getHouseholdInfo(targetHousehold.householdId);
+}
+
 module.exports = {
   readHouseholdTasks,
   writeHouseholdTasks,
@@ -218,5 +377,9 @@ module.exports = {
   initPairingSession,
   pairDevice,
   revokeDevice,
-  readPairingSessions
+  readPairingSessions,
+  getHouseholdIdForUser,
+  getHouseholdInfo,
+  createHousehold,
+  joinHouseholdByCode
 };

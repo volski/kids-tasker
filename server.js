@@ -17,7 +17,11 @@ const {
   initPairingSession,
   pairDevice,
   revokeDevice,
-  readPairingSessions
+  readPairingSessions,
+  getHouseholdIdForUser,
+  getHouseholdInfo,
+  createHousehold,
+  joinHouseholdByCode
 } = require('./db_manager');
 
 const { verifyAuth, requireParentAuth } = require('./auth_middleware');
@@ -1351,6 +1355,47 @@ app.post('/api/devices/revoke', verifyAuth, requireParentAuth, (req, res) => {
     });
 
     res.json({ success: true, revoked });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ---- Family / Household Management Endpoints ----
+app.get('/api/household/my-household', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const info = getHouseholdInfo(req.householdId);
+    if (!info) {
+      return res.status(404).json({ success: false, error: 'משפחה לא נמצאה' });
+    }
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/household/create', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const { name } = req.body || {};
+    const uid = req.user ? req.user.uid : null;
+    const email = req.user ? req.user.email : '';
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const info = createHousehold(uid, email, name);
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/household/join', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const { joinCode } = req.body || {};
+    const uid = req.user ? req.user.uid : null;
+    const email = req.user ? req.user.email : '';
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const info = joinHouseholdByCode(uid, email, joinCode);
+    res.json({ success: true, household: info });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
   }
