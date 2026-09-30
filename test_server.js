@@ -550,9 +550,42 @@ async function runTests() {
     }
     console.log('✓ Verified POST /api/hass/bypass accepts Home Assistant webhook payload ({ state: "off" })');
 
+    // 9. Household & Multi-Parent Management Unit Tests
+    const dbManager = require('./db_manager');
+    const h1 = dbManager.createHousehold('user_owner_1', 'parent1@test.com', 'משפחת כהן');
+    if (!h1 || h1.name !== 'משפחת כהן' || !h1.joinCode || h1.members.length !== 1) {
+      throw new Error('createHousehold failed');
+    }
+    console.log('✓ Verified createHousehold creates household with joinCode & owner');
+
+    const h2 = dbManager.joinHouseholdByCode('user_member_2', 'parent2@test.com', h1.joinCode);
+    if (!h2 || h2.members.length !== 2 || !h2.members.includes('user_member_2')) {
+      throw new Error('joinHouseholdByCode failed');
+    }
+    console.log('✓ Verified joinHouseholdByCode connects second parent to same family');
+
+    const hRenamed = dbManager.renameHousehold('user_owner_1', 'משפחת כהן המורחבת');
+    if (!hRenamed || hRenamed.name !== 'משפחת כהן המורחבת') {
+      throw new Error('renameHousehold failed');
+    }
+    console.log('✓ Verified owner can rename household');
+
+    const hAfterRemove = dbManager.removeMemberFromHousehold('user_owner_1', 'user_member_2');
+    if (!hAfterRemove || hAfterRemove.members.includes('user_member_2')) {
+      throw new Error('removeMemberFromHousehold failed');
+    }
+    console.log('✓ Verified owner can remove member');
+
+    const h3 = dbManager.joinHouseholdByCode('user_member_3', 'parent3@test.com', h1.joinCode);
+    const hAfterLeave = dbManager.leaveHousehold('user_member_3', 'parent3@test.com');
+    if (!hAfterLeave || hAfterLeave.householdId === h1.householdId) {
+      throw new Error('leaveHousehold failed');
+    }
+    console.log('✓ Verified member can leave household and get new standalone household');
+
     clientSocket.disconnect();
 
-    console.log('\n🌟 ALL TESTS PASSED: BIDIRECTIONAL REAL-TIME SYNC + PARENT BYPASS + LOVELACE INJECTION! 🌟');
+    console.log('\n🌟 ALL TESTS PASSED: BIDIRECTIONAL REAL-TIME SYNC + PARENT BYPASS + LOVELACE INJECTION + HOUSEHOLD MANAGEMENT! 🌟');
   } finally {
     try { serverProcess.kill(); } catch (e) {}
     try { mockHass.server.close(); } catch (e) {}

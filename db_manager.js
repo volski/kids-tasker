@@ -257,7 +257,8 @@ function getHouseholdIdForUser(uid, email = '') {
       joinCode,
       ownerUid: uid,
       createdAt: new Date().toISOString(),
-      members: [uid]
+      members: [uid],
+      isConfigured: false
     };
     writeHouseholdsRegistry(registry);
   }
@@ -286,7 +287,9 @@ function getHouseholdInfo(householdId) {
     return {
       uid: mUid,
       email: map.email || '',
-      name: map.name || (map.email ? map.email.split('@')[0] : mUid)
+      name: map.name || (map.email ? map.email.split('@')[0] : mUid),
+      role: household.ownerUid === mUid ? 'owner' : 'member',
+      joinedAt: map.joinedAt || household.createdAt || new Date().toISOString()
     };
   });
 
@@ -297,7 +300,8 @@ function getHouseholdInfo(householdId) {
     ownerUid: household.ownerUid,
     createdAt: household.createdAt,
     members: household.members || [],
-    memberProfiles
+    memberProfiles,
+    isConfigured: household.isConfigured !== false
   };
 }
 
@@ -316,7 +320,8 @@ function createHousehold(ownerUid, ownerEmail, familyName) {
     joinCode,
     ownerUid,
     createdAt: new Date().toISOString(),
-    members: [ownerUid]
+    members: [ownerUid],
+    isConfigured: true
   };
   writeHouseholdsRegistry(registry);
 
@@ -353,8 +358,9 @@ function joinHouseholdByCode(userUid, userEmail, inputCode) {
 
   if (!targetHousehold.members.includes(userUid)) {
     targetHousehold.members.push(userUid);
-    writeHouseholdsRegistry(registry);
   }
+  targetHousehold.isConfigured = true;
+  writeHouseholdsRegistry(registry);
 
   mappings[userUid] = {
     uid: userUid,
@@ -365,6 +371,100 @@ function joinHouseholdByCode(userUid, userEmail, inputCode) {
   writeUserMappings(mappings);
 
   return getHouseholdInfo(targetHousehold.householdId);
+}
+
+function leaveHousehold(userUid, userEmail) {
+  if (!userUid) throw new Error('נדרש מזהה משתמש');
+  const mappings = readUserMappings();
+  const currentHouseholdId = mappings[userUid] ? mappings[userUid].householdId : null;
+
+  if (currentHouseholdId) {
+    const registry = readHouseholdsRegistry();
+    const h = registry[currentHouseholdId];
+    if (h && Array.isArray(h.members)) {
+      h.members = h.members.filter(m => m !== userUid);
+      if (h.members.length === 0) {
+        delete registry[currentHouseholdId];
+      } else if (h.ownerUid === userUid) {
+        h.ownerUid = h.members[0];
+      }
+      writeHouseholdsRegistry(registry);
+    }
+  }
+
+  delete mappings[userUid];
+  writeUserMappings(mappings);
+
+  // Return new standalone household info
+  const newHouseholdId = getHouseholdIdForUser(userUid, userEmail);
+  return getHouseholdInfo(newHouseholdId);
+}
+
+function removeMemberFromHousehold(ownerUid, targetUid) {
+  if (!ownerUid || !targetUid) throw new Error('פרטים חסרים');
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+
+  const ownerHouseholdId = mappings[ownerUid] ? mappings[ownerUid].householdId : null;
+  if (!ownerHouseholdId || !registry[ownerHouseholdId]) {
+    throw new Error('משפחה לא נמצאה');
+  }
+
+  const h = registry[ownerHouseholdId];
+  if (h.ownerUid !== ownerUid) {
+    throw new Error('רק מנהל המשפחה יכול להסיר חברים');
+  }
+  if (ownerUid === targetUid) {
+    throw new Error('לא ניתן להסיר את מנהל המשפחה');
+  }
+
+  h.members = (h.members || []).filter(m => m !== targetUid);
+  writeHouseholdsRegistry(registry);
+
+  if (mappings[targetUid] && mappings[targetUid].householdId === ownerHouseholdId) {
+    delete mappings[targetUid];
+    writeUserMappings(mappings);
+    getHouseholdIdForUser(targetUid, mappings[targetUid] ? mappings[targetUid].email : '');
+  }
+
+  return getHouseholdInfo(ownerHouseholdId);
+}
+
+function renameHousehold(userUid, newName) {
+  if (!userUid) throw new Error('נדרש מזהה משתמש');
+  const safeName = (newName || '').trim();
+  if (!safeName) throw new Error('שם משפחה לא יכול להיות ריק');
+
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+  const hId = mappings[userUid] ? mappings[userUid].householdId : null;
+
+  if (!hId || !registry[hId]) throw new Error('משפחה לא נמצאה');
+  const h = registry[hId];
+  if (h.ownerUid !== userUid) throw new Error('רק מנהל המשפחה יכול לשנות את שם המשפחה');
+
+  h.name = safeName;
+  h.isConfigured = true;
+  writeHouseholdsRegistry(registry);
+
+  return getHouseholdInfo(hId);
+}
+
+function transferOwnership(ownerUid, newOwnerUid) {
+  if (!ownerUid || !newOwnerUid) throw new Error('פרטים חסרים');
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+  const hId = mappings[ownerUid] ? mappings[ownerUid].householdId : null;
+
+  if (!hId || !registry[hId]) throw new Error('משפחה לא נמצאה');
+  const h = registry[hId];
+  if (h.ownerUid !== ownerUid) throw new Error('רק מנהל המשפחה יכול להעביר ניהול');
+  if (!h.members.includes(newOwnerUid)) throw new Error('המשתמש אינו חבר במשפחה זו');
+
+  h.ownerUid = newOwnerUid;
+  writeHouseholdsRegistry(registry);
+
+  return getHouseholdInfo(hId);
 }
 
 module.exports = {
@@ -378,8 +478,14 @@ module.exports = {
   pairDevice,
   revokeDevice,
   readPairingSessions,
+  readHouseholdsRegistry,
   getHouseholdIdForUser,
   getHouseholdInfo,
   createHousehold,
-  joinHouseholdByCode
+  joinHouseholdByCode,
+  leaveHousehold,
+  removeMemberFromHousehold,
+  renameHousehold,
+  transferOwnership
 };
+

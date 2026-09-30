@@ -1,9 +1,11 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { HouseholdService, HouseholdInfo } from '../../services/household.service';
+import * as QRCode from 'qrcode';
+import { HouseholdService, HouseholdInfo, FamilyMember } from '../../services/household.service';
 import { FamilyOnboardingComponent } from '../../family-onboarding/family-onboarding.component';
+import { FirebaseAuthService } from '../../core/services/firebase-auth.service';
 
 export interface AllowedDevice {
   deviceId: string;
@@ -23,43 +25,116 @@ export interface AllowedDevice {
   template: `
     <div class="space-y-6">
       
-      <!-- Family Group Banner -->
-      <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-800/40 rounded-3xl p-5 sm:p-6 shadow-xl space-y-4">
+      <!-- Family Group Banner & Management Card -->
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-800/40 rounded-3xl p-5 sm:p-6 shadow-xl space-y-6">
+        
+        <!-- Header & Info -->
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <div class="w-12 h-12 bg-indigo-600/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center text-2xl">
+            <div class="w-12 h-12 bg-indigo-600/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center text-2xl shadow-inner">
               🏠
             </div>
             <div>
-              <h2 class="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-                <span>{{ household()?.name || 'המשפחה שלי' }}</span>
-              </h2>
-              <p class="text-xs text-slate-400 mt-0.5">קבוצה משפחתית משותפת להורים</p>
+              @if (isEditingName()) {
+                <div class="flex items-center gap-2">
+                  <input
+                    type="text"
+                    [(ngModel)]="editNameValue"
+                    class="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-bold text-base focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button (click)="saveFamilyName()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition">שמור</button>
+                  <button (click)="isEditingName.set(false)" class="px-2 py-1.5 text-slate-400 hover:text-white text-xs font-semibold">ביטול</button>
+                </div>
+              } @else {
+                <h2 class="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+                  <span>{{ household()?.name || 'המשפחה שלי' }}</span>
+                  @if (isOwner()) {
+                    <button (click)="startEditingName()" class="text-slate-400 hover:text-indigo-300 text-sm p-1" title="ערוך שם משפחה">✏️</button>
+                  }
+                </h2>
+              }
+              <p class="text-xs text-slate-400 mt-0.5">קבוצה משפחתית משותפת להורים ולמסכים מורשים</p>
             </div>
           </div>
 
-          <div class="flex items-center gap-3">
-            <div class="bg-slate-950 px-4 py-2 rounded-2xl border border-indigo-500/40 flex items-center gap-2">
-              <span class="text-xs text-slate-400 font-semibold">קוד הצטרפות להורים:</span>
+          <!-- Join Code & Share Actions -->
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="bg-slate-950 px-4 py-2 rounded-2xl border border-indigo-500/40 flex items-center gap-2 shadow-inner">
+              <span class="text-xs text-slate-400 font-semibold">קוד הצטרפות:</span>
               <span class="text-base font-extrabold text-amber-400 font-mono tracking-wider">{{ household()?.joinCode || 'FAM-....' }}</span>
+              <button (click)="copyJoinCode()" class="text-xs bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded-lg text-slate-300 transition" title="העתק קוד">
+                {{ copySuccess() ? '✓ הועתק!' : '📋 העתק' }}
+              </button>
             </div>
 
-            <button (click)="showFamilyModal.set(true)" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition border border-slate-700">
-              ⚙️ ניהול משפחה
+            <button (click)="openQrModal()" class="px-3.5 py-2 bg-indigo-600/80 hover:bg-indigo-600 text-white font-bold rounded-xl text-xs transition border border-indigo-500/40 flex items-center gap-1.5 shadow">
+              <span>📷</span>
+              <span>הצג QR להורה</span>
+            </button>
+
+            <button (click)="showFamilyModal.set(true)" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition border border-slate-700 flex items-center gap-1.5">
+              <span>⚙️</span>
+              <span>צור / הצטרף למשפחה</span>
             </button>
           </div>
         </div>
 
-        @if (household()?.memberProfiles?.length) {
-          <div class="flex items-center gap-2 pt-2 border-t border-slate-800/60 text-xs text-slate-400">
-            <span class="font-semibold text-slate-300">הורים מחוברים:</span>
-            @for (m of household()?.memberProfiles; track m.uid) {
-              <span class="px-2.5 py-1 bg-slate-950 border border-slate-800 rounded-lg text-slate-200 font-medium">
-                👤 {{ m.name || m.email }}
-              </span>
+        <!-- Members Profiles List -->
+        <div class="pt-4 border-t border-slate-800/80 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-extrabold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <span>👨‍👩‍👧‍👦</span>
+              <span>חברי המשפחה ({{ household()?.memberProfiles?.length || 0 }})</span>
+            </h3>
+
+            @if (!isOwner() && household()?.memberProfiles?.length) {
+              <button (click)="leaveHousehold()" class="text-xs text-rose-400 hover:text-rose-300 font-bold flex items-center gap-1">
+                <span>🚪</span>
+                <span>עזוב קבוצה משפחתית</span>
+              </button>
             }
           </div>
-        }
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            @for (m of household()?.memberProfiles; track m.uid) {
+              <div class="bg-slate-950 border border-slate-800/90 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-sm">
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-lg flex-shrink-0">
+                    👤
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-bold text-white truncate dir-ltr text-right">{{ m.name || m.email }}</span>
+                      @if (m.role === 'owner') {
+                        <span class="px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-extrabold rounded-md flex-shrink-0">
+                          בעלים 👑
+                        </span>
+                      } @else {
+                        <span class="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] font-semibold rounded-md flex-shrink-0">
+                          חבר/ה
+                        </span>
+                      }
+                    </div>
+                    <span class="text-[11px] text-slate-500 truncate block dir-ltr text-right">{{ m.email }}</span>
+                  </div>
+                </div>
+
+                <!-- Owner Actions per member -->
+                @if (isOwner() && m.uid !== currentUid()) {
+                  <div class="flex items-center gap-1 flex-shrink-0">
+                    <button (click)="transferOwner(m)" class="p-1.5 hover:bg-slate-800 text-amber-400 rounded-lg text-xs" title="העבר בעלות למשתמש זה">
+                      👑
+                    </button>
+                    <button (click)="removeMember(m)" class="p-1.5 hover:bg-rose-950/60 text-rose-400 rounded-lg text-xs" title="הסר משתמש ממהמשפחה">
+                      🗑️
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+
       </div>
 
       <!-- Top Banner & Manual Pairing Button -->
@@ -137,6 +212,37 @@ export interface AllowedDevice {
         </div>
       }
 
+      <!-- QR Share Modal -->
+      @if (showQrModal()) {
+        <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-5 text-center">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xl font-black text-white">הצטרפות הורה למשפחה</h3>
+              <button (click)="showQrModal.set(false)" class="text-slate-400 hover:text-white text-xl font-bold">✕</button>
+            </div>
+
+            <p class="text-xs text-slate-400">סרוק את הברקוד בטלפון של ההורה השני להצטרפות מיידית למשפחה:</p>
+
+            <div class="bg-white p-4 rounded-2xl inline-block shadow-inner mx-auto border-4 border-indigo-500/30">
+              @if (qrDataUrl()) {
+                <img [src]="qrDataUrl()" alt="Family Join QR" class="w-48 h-48 rounded-lg mx-auto">
+              }
+            </div>
+
+            <div class="space-y-1">
+              <span class="text-xs font-bold text-slate-400 block">קוד הצטרפות:</span>
+              <div class="text-2xl font-black text-amber-400 font-mono tracking-widest bg-slate-950 py-2 rounded-xl border border-slate-800">
+                {{ household()?.joinCode }}
+              </div>
+            </div>
+
+            <button (click)="showQrModal.set(false)" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-sm transition">
+              סגור
+            </button>
+          </div>
+        </div>
+      }
+
       <!-- Manual Pair Modal -->
       @if (showPairModal()) {
         <div class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -191,6 +297,7 @@ export interface AllowedDevice {
 export class DevicesTabComponent implements OnInit {
   private http = inject(HttpClient);
   private householdService = inject(HouseholdService);
+  private authService = inject(FirebaseAuthService);
 
   public household = signal<HouseholdInfo | null>(null);
   public devices = signal<AllowedDevice[]>([]);
@@ -198,11 +305,25 @@ export class DevicesTabComponent implements OnInit {
   public isRevoking = signal<string | null>(null);
   public showPairModal = signal<boolean>(false);
   public showFamilyModal = signal<boolean>(false);
+  public showQrModal = signal<boolean>(false);
   public isSubmittingModal = signal<boolean>(false);
   public modalError = signal<string | null>(null);
 
+  public isEditingName = signal<boolean>(false);
+  public editNameValue = '';
+  public copySuccess = signal<boolean>(false);
+  public qrDataUrl = signal<string | null>(null);
+
   public inputCode = '';
   public inputName = 'מסך חדש';
+
+  public currentUid = computed(() => this.authService.currentUser?.uid);
+  public isOwner = computed(() => {
+    const h = this.household();
+    const uid = this.currentUid();
+    if (!h || !uid) return true;
+    return h.ownerUid === uid;
+  });
 
   ngOnInit() {
     this.loadHousehold();
@@ -235,6 +356,77 @@ export class DevicesTabComponent implements OnInit {
         }
       },
       error: () => this.isLoading.set(false)
+    });
+  }
+
+  public copyJoinCode() {
+    const code = this.household()?.joinCode;
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      this.copySuccess.set(true);
+      setTimeout(() => this.copySuccess.set(false), 2000);
+    });
+  }
+
+  public async openQrModal() {
+    const code = this.household()?.joinCode;
+    if (!code) return;
+    try {
+      const url = await QRCode.toDataURL(code, { width: 300, margin: 2 });
+      this.qrDataUrl.set(url);
+      this.showQrModal.set(true);
+    } catch (err) {
+      console.error('Failed to render QR Code', err);
+    }
+  }
+
+  public startEditingName() {
+    this.editNameValue = this.household()?.name || '';
+    this.isEditingName.set(true);
+  }
+
+  public saveFamilyName() {
+    if (!this.editNameValue.trim()) return;
+    this.householdService.renameHousehold(this.editNameValue).subscribe({
+      next: (res) => {
+        if (res && res.household) {
+          this.household.set(res.household);
+        }
+        this.isEditingName.set(false);
+      }
+    });
+  }
+
+  public removeMember(m: FamilyMember) {
+    if (!confirm(`האם אתה בטוח שברצונך להסיר את ${m.name || m.email} מהמשפחה?`)) return;
+    this.householdService.removeMember(m.uid).subscribe({
+      next: (res) => {
+        if (res && res.household) {
+          this.household.set(res.household);
+        }
+      }
+    });
+  }
+
+  public transferOwner(m: FamilyMember) {
+    if (!confirm(`האם להעביר את הניהול הראשי של המשפחה ל-${m.name || m.email}?`)) return;
+    this.householdService.transferOwnership(m.uid).subscribe({
+      next: (res) => {
+        if (res && res.household) {
+          this.household.set(res.household);
+        }
+      }
+    });
+  }
+
+  public leaveHousehold() {
+    if (!confirm('האם אתה בטוח שברצונך לעזוב את הקבוצה המשפחתית?')) return;
+    this.householdService.leaveHousehold().subscribe({
+      next: (res) => {
+        if (res && res.household) {
+          this.household.set(res.household);
+        }
+      }
     });
   }
 

@@ -22,7 +22,11 @@ const {
   getHouseholdIdForUser,
   getHouseholdInfo,
   createHousehold,
-  joinHouseholdByCode
+  joinHouseholdByCode,
+  leaveHousehold,
+  removeMemberFromHousehold,
+  renameHousehold,
+  transferOwnership
 } = require('./db_manager');
 
 const { getAuth } = require('firebase-admin/auth');
@@ -1417,6 +1421,7 @@ app.post('/api/household/create', verifyAuth, requireParentAuth, (req, res) => {
     if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
 
     const info = createHousehold(uid, email, name);
+    io.to(info.householdId).emit('household_updated', info);
     res.json({ success: true, household: info });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
@@ -1431,6 +1436,67 @@ app.post('/api/household/join', verifyAuth, requireParentAuth, (req, res) => {
     if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
 
     const info = joinHouseholdByCode(uid, email, joinCode);
+    io.to(info.householdId).emit('household_updated', info);
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/household/leave', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const uid = req.user ? req.user.uid : null;
+    const email = req.user ? req.user.email : '';
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const oldHouseholdId = req.householdId;
+    const info = leaveHousehold(uid, email);
+    if (oldHouseholdId) {
+      const oldInfo = getHouseholdInfo(oldHouseholdId);
+      if (oldInfo) io.to(oldHouseholdId).emit('household_updated', oldInfo);
+    }
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/household/members/:targetUid', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const uid = req.user ? req.user.uid : null;
+    const { targetUid } = req.params;
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const info = removeMemberFromHousehold(uid, targetUid);
+    io.to(info.householdId).emit('household_updated', info);
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/household/rename', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const uid = req.user ? req.user.uid : null;
+    const { name } = req.body || {};
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const info = renameHousehold(uid, name);
+    io.to(info.householdId).emit('household_updated', info);
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/household/transfer-owner', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const uid = req.user ? req.user.uid : null;
+    const { newOwnerUid } = req.body || {};
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const info = transferOwnership(uid, newOwnerUid);
+    io.to(info.householdId).emit('household_updated', info);
     res.json({ success: true, household: info });
   } catch (err) {
     res.status(400).json({ success: false, error: err.message });
