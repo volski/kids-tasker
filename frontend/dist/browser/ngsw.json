@@ -1,0 +1,98 @@
+{
+  "configVersion": 1,
+  "timestamp": 1790768753566,
+  "index": "/index.html",
+  "assetGroups": [
+    {
+      "name": "app-shell",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/chunk-5NNGV67N.js",
+        "/chunk-63IZNV7H.js",
+        "/chunk-IV65RRK3.js",
+        "/chunk-NN4EYQMX.js",
+        "/chunk-P72DK23Y.js",
+        "/chunk-SU6TSRM2.js",
+        "/chunk-UWB2VUOK.js",
+        "/chunk-VNCURU65.js",
+        "/chunk-YFZI5IXL.js",
+        "/favicon.ico",
+        "/main-5ROGPOVA.js",
+        "/manifest.webmanifest",
+        "/polyfills-FFHMD2TL.js",
+        "/styles-2GL32VPU.css"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/icons/pwa-192.png",
+        "/icons/pwa-512.png"
+      ],
+      "patterns": []
+    }
+  ],
+  "dataGroups": [
+    {
+      "name": "api-freshness",
+      "patterns": [
+        "\\/api\\/.*"
+      ],
+      "strategy": "freshness",
+      "maxSize": 5,
+      "maxAge": 0,
+      "timeoutMs": 10000,
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "version": 1
+    }
+  ],
+  "hashTable": {
+    "/chunk-5NNGV67N.js": "5e22bfc75f5964c1bd826540626f62a68124a94e",
+    "/chunk-63IZNV7H.js": "37e55860f24178c14fa16b4e844679e70c4c3610",
+    "/chunk-IV65RRK3.js": "f7997ae4437ff2ccacd58a50e188c97be4cf47c1",
+    "/chunk-NN4EYQMX.js": "c1f769bf1cee73ba8056f4b5964f2afbd8baaf8a",
+    "/chunk-P72DK23Y.js": "1b8bda0974db6f3170d75ec854d606fded677fe6",
+    "/chunk-SU6TSRM2.js": "ccbd3b2f49dd69580cc161906650675371d4f124",
+    "/chunk-UWB2VUOK.js": "5f73305a8e8ce7bab731331a60f160ef48d0d656",
+    "/chunk-VNCURU65.js": "634866dac8004b3a4fc3cdce48cf2d50a77ba0b3",
+    "/chunk-YFZI5IXL.js": "ae151d9a42b9ab799bceb6804e6877d4934eb607",
+    "/favicon.ico": "9c39f434fe1261f68c5e3eefdf734630d99c5670",
+    "/icons/pwa-192.png": "68cf1d53e4242b8e57f7da9771945fa402dbbff5",
+    "/icons/pwa-512.png": "a6f95ba2c1edb4b1368456ba6f674eb2bf1d2285",
+    "/main-5ROGPOVA.js": "da1c43de5737f305fbb8c5e83292ec5953a0063c",
+    "/manifest.webmanifest": "198ba8479188374e6b5e12c281cda761aeb4a3fe",
+    "/polyfills-FFHMD2TL.js": "f49b49a155bc7d192db62a4c15d0a612b460a667",
+    "/styles-2GL32VPU.css": "4cd2da821093c64fa31d78f1fd035b88984217bb"
+  },
+  "navigationUrls": [
+    {
+      "positive": true,
+      "regex": "^\\/.*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*\\.[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
+    }
+  ],
+  "navigationRequestStrategy": "performance"
+}

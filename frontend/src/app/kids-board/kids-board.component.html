@@ -20,6 +20,32 @@
         </div>
       }
 
+      <!-- Install App (Android/Chrome/Edge: native prompt) -->
+      @if (pwa.canInstall()) {
+        <button (click)="pwa.promptInstall()"
+          class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500/50 shadow-sm transition animate-pulse">
+          <span>📲</span>
+          <span class="hidden sm:inline">התקן אפליקציה</span>
+        </button>
+      }
+
+      <!-- Install hint (iOS Safari: manual flow) -->
+      @if (pwa.isIosSafari() && !pwa.isInstalled()) {
+        <div class="relative">
+          <button (click)="showIosHint = !showIosHint"
+            class="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 shadow-sm transition">
+            <span>📲</span>
+            <span class="hidden sm:inline">התקן</span>
+          </button>
+          @if (showIosHint) {
+            <div class="absolute top-full left-0 mt-2 w-52 bg-slate-800 border border-slate-600 rounded-xl p-3 text-xs text-slate-200 text-right shadow-2xl z-50 leading-relaxed">
+              לחץ על <strong>⬆️ שתף</strong> ואז<br>
+              <strong>"הוסף למסך הבית"</strong>
+            </div>
+          }
+        </div>
+      }
+
       <!-- Parent Access -->
       <button (click)="openPinModal()"
         class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 shadow-sm transition">
