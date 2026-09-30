@@ -129,8 +129,8 @@ export class ParentShellComponent implements OnInit, OnDestroy {
 
   getTabClass(tab: string) {
     if (this.activeTab() === tab) {
-      return 'px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-indigo-600 text-white shadow-md';
+      return 'whitespace-nowrap flex-shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-indigo-600 text-white shadow-md';
     }
-    return 'px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-slate-800/80 text-slate-300 hover:bg-slate-800';
+    return 'whitespace-nowrap flex-shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-slate-800/80 text-slate-300 hover:bg-slate-800';
   }
 }
