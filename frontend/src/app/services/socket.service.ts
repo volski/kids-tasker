@@ -32,6 +32,12 @@ export class SocketService implements OnDestroy {
     return this.socket.connected;
   }
 
+  connect(): void {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
+  }
+
   ngOnDestroy(): void {
     this.socket.disconnect();
     this.taskUpdated$.complete();

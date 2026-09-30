@@ -6,10 +6,6 @@ import { Observable } from 'rxjs';
 export class HassService {
   constructor(private http: HttpClient) {}
 
-  getStatus(): Observable<any> {
-    return this.http.get('/api/hass/status');
-  }
-
   getConfig(): Observable<any> {
     return this.http.get('/api/hass/config');
   }
@@ -18,23 +14,27 @@ export class HassService {
     return this.http.post('/api/hass/config', config);
   }
 
-  testConnection(config: any): Observable<any> {
-    return this.http.post('/api/hass/test', config);
+  testConnection(payload: any): Observable<any> {
+    return this.http.post('/api/hass/test', payload);
   }
 
   createEntities(): Observable<any> {
     return this.http.post('/api/hass/create-entities', {});
   }
 
-  addCard(): Observable<any> {
-    return this.http.post('/api/hass/add-card', {});
-  }
-
-  getCardYaml(): Observable<string> {
-    return this.http.get('/api/hass/card-yaml', { responseType: 'text' });
+  getStatus(): Observable<any> {
+    return this.http.get('/api/hass/status');
   }
 
   setBypass(enabled: boolean): Observable<any> {
-    return this.http.post('/api/hass/bypass', { state: enabled ? 'on' : 'off' });
+    return this.http.post('/api/hass/bypass', { enabled });
+  }
+
+  getCardYaml(): Observable<any> {
+    return this.http.get('/api/hass/card-yaml');
+  }
+
+  addCard(): Observable<any> {
+    return this.http.post('/api/hass/add-card', {});
   }
 }
