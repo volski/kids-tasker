@@ -132,7 +132,14 @@ async function verifyAuth(req, res, next) {
     }
   }
 
-  // 3. Fallback for test runner if no auth provided in test mode
+  // 3. Parent PIN Unlocked Request (Standalone / PIN Mode)
+  if (req.headers['x-parent-unlocked'] === '1') {
+    req.isParent = true;
+    req.householdId = req.headers['x-household-id'] || 'house_default';
+    return next();
+  }
+
+  // 4. Fallback for test runner if no auth provided in test mode
   if (process.env.NODE_ENV === 'test') {
     const testUid = req.headers['x-test-uid'] || 'house_test';
     req.householdId = testUid;
