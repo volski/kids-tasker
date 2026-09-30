@@ -1,0 +1,28 @@
+.pin-key {
+  height: 64px;
+  border-radius: 16px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #fff;
+  background: #1e293b;
+  border: 1px solid #334155;
+  transition: background 0.1s, transform 0.08s;
+  touch-action: manipulation;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.pin-key:active,
+.pin-key:focus-visible { background: #3730a3; transform: scale(0.93); outline: none; }
+.pin-key-secondary { font-size: 0.85rem; background: #334155; }
+.pin-key-del { font-size: 1.3rem; background: #450a0a; border-color: #7f1d1d; }
+
+@keyframes pinShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-10px); }
+  60% { transform: translateX(10px); }
+  80% { transform: translateX(-6px); }
+}
+.pin-shake { animation: pinShake 0.38s ease; }
