@@ -26,11 +26,15 @@ function initFirebase() {
     const serviceAccountFile = findServiceAccountFile();
     if (serviceAccountFile) {
       const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountFile, 'utf8'));
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-      firebaseInitialized = true;
-      console.log(`[Auth] Firebase Admin initialized via ${path.basename(serviceAccountFile)}`);
+      if (serviceAccount && serviceAccount.private_key && serviceAccount.client_email) {
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount)
+        });
+        firebaseInitialized = true;
+        console.log(`[Auth] Firebase Admin initialized via ${path.basename(serviceAccountFile)}`);
+      } else {
+        console.warn(`[Auth] File ${path.basename(serviceAccountFile)} is empty or unconfigured. Fill in your keys to enable cloud verification.`);
+      }
     } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       const serviceAccount = typeof process.env.FIREBASE_SERVICE_ACCOUNT === 'string'
         ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
