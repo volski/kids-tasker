@@ -70,23 +70,23 @@
     <div class="max-w-7xl mx-auto flex gap-2 sm:gap-4 overflow-x-auto py-2">
       <a routerLink="status" [class]="getTabClass('status')">
         <span>📊</span>
-        <span>סטטוס משימות היום</span>
+        <span class="hidden sm:inline">סטטוס משימות היום</span>
       </a>
       <a routerLink="manage" [class]="getTabClass('manage')">
         <span>✏️</span>
-        <span>ניהול ילדים ומשימות</span>
+        <span class="hidden sm:inline">ניהול ילדים ומשימות</span>
       </a>
       <a routerLink="history" [class]="getTabClass('history')">
         <span>📅</span>
-        <span>היסטוריית משימות</span>
+        <span class="hidden sm:inline">היסטוריית משימות</span>
       </a>
       <a routerLink="hass" [class]="getTabClass('hass')">
         <span>🏠</span>
-        <span>בית חכם (Home Assistant)</span>
+        <span class="hidden sm:inline">בית חכם</span>
       </a>
       <a routerLink="settings" [class]="getTabClass('settings')">
         <span>⚙️</span>
-        <span>הגדרות</span>
+        <span class="hidden sm:inline">הגדרות</span>
       </a>
     </div>
   </div>
