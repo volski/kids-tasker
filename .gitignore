@@ -19,6 +19,11 @@ sounds/*
 # Environment and local configuration with sensitive keys
 .env
 *.env
+serviceAccount.json
+serviceAccountKey.json
+firebaseConfig.json
+!serviceAccount.example.json
+!firebaseConfig.example.json
 
 # Temporary and log files
 *.tmp
