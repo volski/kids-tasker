@@ -125,7 +125,7 @@ async function verifyAuth(req, res, next) {
       req.isDevice = true;
       req.deviceId = dev.deviceId;
       req.householdId = dev.householdId;
-      req.isParent = false;
+      req.isParent = req.headers['x-parent-unlocked'] === '1';
       return next();
     } else {
       return res.status(401).json({ error: 'מכשיר זה אינו מורשה או שחיבורו הוסר.', code: 'DEVICE_REVOKED' });

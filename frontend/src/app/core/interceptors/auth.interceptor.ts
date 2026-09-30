@@ -13,10 +13,16 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     switchMap(idToken => {
       let headers = req.headers;
 
+      const isParentUnlocked = sessionStorage.getItem('kids_tasker_parent_unlocked') === '1';
+
       if (idToken) {
         headers = headers.set('Authorization', `Bearer ${idToken}`);
       } else if (deviceToken) {
         headers = headers.set('X-Device-Token', deviceToken);
+      }
+
+      if (isParentUnlocked) {
+        headers = headers.set('X-Parent-Unlocked', '1');
       }
 
       const cloned = req.clone({ headers });
