@@ -7,6 +7,7 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { TaskService } from '../services/task.service';
 import { SocketService } from '../services/socket.service';
+import { PwaService } from '../services/pwa.service';
 import { AppData, Child, Task, AudioPreset } from '../models/task.model';
 import { PinModalComponent } from '../shared/pin-modal/pin-modal.component';
 
@@ -52,6 +53,7 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
   private toastTimer: any;
   private pullStartY = 0;
   private pulling = false;
+  showIosHint = false;
 
   readonly hebrewDate: string;
 
@@ -60,6 +62,7 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
     private socketService: SocketService,
     private router: Router,
     private cdr: ChangeDetectorRef,
+    public pwa: PwaService,
   ) {
     try {
       this.hebrewDate = new Intl.DateTimeFormat('he-IL', {

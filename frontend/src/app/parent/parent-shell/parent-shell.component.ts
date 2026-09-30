@@ -5,6 +5,7 @@ import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { SocketService } from '../../services/socket.service';
 import { TaskService } from '../../services/task.service';
+import { PwaService } from '../../services/pwa.service';
 import { PinModalComponent } from '../../shared/pin-modal/pin-modal.component';
 import { ConfirmModalComponent } from '../../shared/confirm-modal/confirm-modal.component';
 
@@ -23,7 +24,8 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   isUnlocked = signal(false);
   toastMessage = signal<string | null>(null);
   toastType = signal<'success' | 'error'>('success');
-  
+  showIosHint = false;
+
   private socketSub?: Subscription;
   private socketDeltaSub?: Subscription;
   private routerSub?: Subscription;
@@ -32,7 +34,8 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   constructor(
     private router: Router,
     private socketService: SocketService,
-    private taskService: TaskService
+    private taskService: TaskService,
+    public pwa: PwaService,
   ) {
     this.routerSub = this.router.events.pipe(
       filter(e => e instanceof NavigationEnd)
