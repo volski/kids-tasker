@@ -1,0 +1,240 @@
+<div class="space-y-8">
+  <!-- Overview Banner -->
+  <div class="bg-gradient-to-r from-blue-900/50 to-indigo-900/50 border border-indigo-700/40 rounded-3xl p-6 shadow-xl flex items-start gap-4">
+    <div class="text-4xl p-3 bg-indigo-600/30 rounded-2xl border border-indigo-500/30">
+      📺
+    </div>
+    <div>
+      <h2 class="text-2xl font-black text-white">אינטגרציית Home Assistant ויצירת ישויות אוטומטית</h2>
+      <p class="text-sm text-slate-300 mt-1 leading-relaxed">
+        המערכת מייצרת ומעדכנת ישויות ישירות ב-Home Assistant (ללא צורך בהגדרה ידנית ב-Hass.io).
+        הישות הראשית <code class="bg-indigo-950/80 px-2 py-0.5 rounded text-indigo-300 font-mono">binary_sensor.kids_tasks_allow_tv</code> מסמנת האם מותר להדליק טלוויזיה!
+      </p>
+    </div>
+  </div>
+
+  <!-- Parent Bypass Quick Control -->
+  <div class="bg-gradient-to-r from-purple-950/70 to-slate-900 border border-purple-800/60 rounded-3xl p-6 sm:p-8 shadow-xl flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 rounded-2xl bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-2xl flex-shrink-0">
+        🔓
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h3 class="text-lg sm:text-xl font-black text-white">מעקף הורים לטלוויזיה (Parent TV Bypass)</h3>
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold" [ngClass]="status().parent_bypass ? 'bg-purple-900 text-purple-200 border border-purple-700' : 'bg-slate-800 text-slate-400'">
+            {{ status().parent_bypass ? 'פעיל 🔓' : 'כבוי 🔒' }}
+          </span>
+        </div>
+        <p class="text-xs text-slate-300 mt-1">פתיחת הטלוויזיה לצפייה גם אם הילדים טרם השלימו משימות.</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button (click)="toggleBypass()" type="button" class="px-5 py-2.5 rounded-xl font-bold text-xs shadow-lg transition flex items-center gap-2 text-white" [ngClass]="status().parent_bypass ? 'bg-rose-700 hover:bg-rose-600' : 'bg-purple-600 hover:bg-purple-500'">
+        @if (status().parent_bypass) {
+          <span>🔒 בטל מעקף הורים</span>
+        } @else {
+          <span>🔓 הפעל מעקף עכשיו</span>
+        }
+      </button>
+    </div>
+  </div>
+
+  <!-- Configuration Form -->
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+    <h3 class="text-xl font-black text-white flex items-center gap-2">
+      <span>⚙️</span>
+      <span>הגדרות חיבור ל-Home Assistant</span>
+    </h3>
+
+    <form (submit)="saveConfig($event)" class="space-y-6">
+      <div class="flex items-center justify-between p-4 bg-slate-950 rounded-2xl border border-slate-800">
+        <div>
+          <label for="hass-enabled" class="font-bold text-base text-white block cursor-pointer">הפעל אינטגרציה עם Home Assistant</label>
+          <span class="text-xs text-slate-400">הפעלת יצירת ישויות אוטומטית וחסימת טלוויזיה</span>
+        </div>
+        <input type="checkbox" id="hass-enabled" [(ngModel)]="config().enabled" name="enabled" class="w-6 h-6 rounded-lg accent-indigo-600 cursor-pointer">
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block text-sm font-bold text-slate-300 mb-2">כתובת שרת Home Assistant (URL)</label>
+          <input 
+            type="text" 
+            [(ngModel)]="config().url"
+            name="url"
+            placeholder="http://homeassistant.local:8123 או http://192.168.1.100:8123" 
+            class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+          <span class="text-xs text-slate-500 mt-1 block">כולל פורט :8123</span>
+        </div>
+
+        <div>
+          <label class="block text-sm font-bold text-slate-300 mb-2">טוקן גישה לטווח ארוך</label>
+          <input 
+            type="password" 
+            [(ngModel)]="config().token"
+            name="token"
+            [placeholder]="config().tokenMasked ? '(שמור טוקן סודי)' : 'הדבק טוקן גישה מ-Home Assistant...'" 
+            class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+          <span class="text-xs text-slate-500 mt-1 block">נוצר בפרופיל המשתמש ב-Home Assistant</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-slate-800">
+        <div>
+          <label class="block text-sm font-bold text-slate-300 mb-2">ישות הטלוויזיה (Entity ID - אופציונלי לחסימה ישירה)</label>
+          <input 
+            type="text" 
+            [(ngModel)]="config().tvEntityId"
+            name="tvEntityId"
+            placeholder="למשל: switch.living_room_tv_socket או media_player.tv" 
+            class="w-full px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+          <span class="text-xs text-slate-500 mt-1 block">אם מוגדר, השרת יכבה ישות זו ישירות כל עוד המשימות לא הושלמו</span>
+        </div>
+
+        <div class="flex flex-col justify-center">
+          <label class="flex items-center gap-3 p-4 bg-slate-950 rounded-2xl border border-slate-800 cursor-pointer">
+            <input type="checkbox" [(ngModel)]="config().autoBlockTv" name="autoBlockTv" class="w-5 h-5 rounded accent-rose-600 cursor-pointer">
+            <div>
+              <span class="font-bold text-sm text-white block">חסימת טלוויזיה אוטומטית פעילה</span>
+              <span class="text-xs text-slate-400">כיבוי מיידי של הטלוויזיה אם היא מודלקת לפני סיום המשימות</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800">
+        <div class="flex items-center gap-3">
+          <button type="submit" [disabled]="isSaving()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg transition flex items-center gap-2">
+            <span>{{ isSaving() ? 'שומר...' : 'שמור הגדרות' }}</span>
+            <span>💾</span>
+          </button>
+        </div>
+
+        <button type="button" (click)="testConnection()" [disabled]="isTesting()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl border border-slate-700 transition flex items-center gap-2">
+          <span>{{ isTesting() ? 'בודק...' : 'בדוק חיבור 📡' }}</span>
+        </button>
+      </div>
+    </form>
+
+    @if (testResult()) {
+      <div class="p-4 rounded-2xl border text-sm font-medium" [ngClass]="testResult()?.ok ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-200' : 'bg-rose-950/60 border-rose-700/60 text-rose-200'">
+        <div class="flex items-center gap-2 font-bold" [ngClass]="testResult()?.ok ? 'text-emerald-300' : 'text-rose-300'">
+          <span>{{ testResult()?.ok ? '✔' : '❌' }}</span>
+          <span>{{ testResult()?.message }}</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Entities Live Box -->
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h3 class="text-xl font-black text-white flex items-center gap-2">
+          <span>✨</span>
+          <span>ישויות שנוצרות ומסונכרנות אוטומטית ב-Home Assistant</span>
+        </h3>
+        <p class="text-xs text-slate-400 mt-1">Kids Tasker מייצר ישויות אלו ישירות ב-Home Assistant</p>
+      </div>
+      <button (click)="createEntities()" [disabled]="!config().enabled || isCreating()" class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-1.5 disabled:opacity-50">
+        <span>{{ isCreating() ? 'מייצר...' : '⚡ צור / רענן ישויות עכשיו' }}</span>
+      </button>
+    </div>
+
+    @if (createdEntities().length > 0) {
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+        @for (ent of createdEntities(); track ent.entity_id) {
+          <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-bold text-xs sm:text-sm text-indigo-300 font-mono truncate">{{ ent.entity_id }}</div>
+              <div class="text-xs text-slate-400 mt-0.5 truncate">{{ ent.friendly_name }}</div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <span class="px-2.5 py-1 text-xs font-bold rounded-lg" [ngClass]="ent.state === 'on' ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-slate-900 text-slate-300 border-slate-800'">
+                {{ ent.state }}
+              </span>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Lovelace Card Preview -->
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h3 class="text-xl font-black text-white flex items-center gap-2">
+          <span>🎴</span>
+          <span>כרטיס לוח בקרה ל-Home Assistant (Lovelace Card)</span>
+        </h3>
+        <p class="text-xs text-slate-400 mt-1">כרטיס מעוצב המרכז את כל ישויות המשימות</p>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button (click)="addLovelaceCard()" [disabled]="isAddingCard() || !config().enabled" class="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center gap-2 disabled:opacity-50">
+          <span>➕ הוסף כרטיס ל-Home Assistant בלחיצה אחת</span>
+        </button>
+        <button (click)="copyYaml(yamlCode())" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition flex items-center gap-1.5">
+          <span>📋 העתק קוד כרטיס</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Live Preview -->
+      <div class="space-y-2">
+        <div class="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+          <span>👁️</span>
+          <span>תצוגה מקדימה:</span>
+        </div>
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-inner">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div class="font-black text-base text-white flex items-center gap-2">
+              <span>📋</span>
+              <span>לוח משימות לילדים</span>
+            </div>
+          </div>
+          
+          <div class="space-y-2 text-xs">
+            <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+              <div class="flex items-center gap-2 text-slate-300">
+                <span class="text-base">📺</span>
+                <span class="font-medium">אישור צפייה בטלוויזיה</span>
+              </div>
+              <span class="px-2 py-0.5 rounded font-mono font-bold text-[11px]" [ngClass]="status().all_completed ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-rose-950 text-rose-300 border-rose-800'">
+                {{ status().all_completed ? 'on' : 'off' }}
+              </span>
+            </div>
+            
+            <div class="flex items-center justify-between p-2 rounded-xl bg-slate-900/80 border border-slate-800/50">
+              <div class="flex items-center gap-2 text-slate-300">
+                <span class="text-base">🔓</span>
+                <span class="font-medium">מעקף הורים (פתיחת טלוויזיה)</span>
+              </div>
+              <span class="px-2 py-0.5 rounded font-mono font-bold text-[11px]" [ngClass]="status().parent_bypass ? 'bg-purple-950 text-purple-300 border-purple-800' : 'bg-slate-800 text-slate-300'">
+                {{ status().parent_bypass ? 'on' : 'off' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- YAML Code -->
+      <div class="space-y-2">
+        <div class="text-xs font-bold text-slate-400 flex items-center justify-between">
+          <span class="flex items-center gap-1.5">
+            <span>📄</span>
+            <span>קוד YAML:</span>
+          </span>
+        </div>
+        <pre class="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs font-mono text-indigo-300 overflow-x-auto h-72 leading-relaxed dir-ltr text-left">{{ yamlCode() || 'טוען קוד YAML...' }}</pre>
+      </div>
+    </div>
+  </div>
+</div>

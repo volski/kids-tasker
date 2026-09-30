@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test_server.js"
+    "test": "node test_server.js",
+    "test:e2e": "node test_e2e_runner.js"
   },
   "keywords": [
     "task-board",
@@ -23,6 +24,8 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "playwright": "^1.63.0",
     "socket.io-client": "^4.8.3"
   }
 }
