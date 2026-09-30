@@ -17,7 +17,7 @@ export class PinService {
   }
 
   setPin(pin: string, currentPin?: string): Observable<any> {
-    return this.http.post('/api/parent/set-pin', { pin, currentPin });
+    return this.http.post('/api/parent/set-pin', { pin, confirmPin: pin, currentPin });
   }
 
   setVerified(value: boolean): void {

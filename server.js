@@ -1200,6 +1200,10 @@ function startHassPolling() {
 }
 
 // Middleware
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  next();
+});
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -1596,7 +1600,8 @@ app.get('/api/hass/card-yaml', (req, res) => {
 // Check if a parent PIN is configured
 app.get('/api/parent/pin-status', (req, res) => {
   try {
-    const data = readTasks();
+    const householdId = req.householdId || 'house_default';
+    const data = readTasks(householdId);
     const hasPin = Boolean(data.parentPin && String(data.parentPin).trim().length >= 4);
     res.json({ success: true, hasPin });
   } catch (error) {
@@ -1608,7 +1613,8 @@ app.get('/api/parent/pin-status', (req, res) => {
 app.post('/api/parent/verify-pin', (req, res) => {
   try {
     const { pin } = req.body || {};
-    const data = readTasks();
+    const householdId = req.householdId || 'house_default';
+    const data = readTasks(householdId);
     const existingPin = data.parentPin ? String(data.parentPin).trim() : null;
 
     // If no PIN has been set yet, any verification is bypassed / indicates setup needed
@@ -1631,7 +1637,8 @@ app.post('/api/parent/verify-pin', (req, res) => {
 app.post('/api/parent/set-pin', (req, res) => {
   try {
     const { pin, confirmPin, currentPin } = req.body || {};
-    const data = readTasks();
+    const householdId = req.householdId || 'house_default';
+    const data = readTasks(householdId);
     const existingPin = data.parentPin ? String(data.parentPin).trim() : null;
 
     // If a PIN already exists, require valid currentPin
@@ -1642,7 +1649,7 @@ app.post('/api/parent/set-pin', (req, res) => {
     }
 
     const cleanPin = String(pin || '').trim();
-    const cleanConfirm = String(confirmPin || '').trim();
+    const cleanConfirm = (confirmPin !== undefined && confirmPin !== null) ? String(confirmPin).trim() : cleanPin;
 
     if (!/^\d{4,6}$/.test(cleanPin)) {
       return res.status(400).json({ success: false, error: 'על קוד ה-PIN להכיל בין 4 ל-6 ספרות בלבד.' });
@@ -1653,7 +1660,7 @@ app.post('/api/parent/set-pin', (req, res) => {
     }
 
     data.parentPin = cleanPin;
-    writeTasks(data);
+    writeTasks(data, householdId);
 
     res.json({ success: true, message: 'קוד ה-PIN נשמר בהצלחה!' });
   } catch (error) {
