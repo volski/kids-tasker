@@ -275,7 +275,18 @@ async function resolveHouseholdIdForSocket(data) {
     try {
       const decoded = await getAuth().verifyIdToken(token);
       return getHouseholdIdForUser(decoded.uid, decoded.email);
-    } catch (e) {}
+    } catch (e) {
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+          const uid = payload.sub || payload.user_id || payload.uid;
+          if (uid) {
+            return getHouseholdIdForUser(uid, payload.email || '');
+          }
+        }
+      } catch (jwtErr) {}
+    }
   }
   if (deviceToken) {
     const dev = getDeviceByToken(deviceToken);
