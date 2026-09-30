@@ -1,20 +1,45 @@
+const path = require('path');
+const fs = require('fs');
 const admin = require('firebase-admin');
 const { getDeviceByToken } = require('./db_manager');
 
 // Initialize Firebase Admin SDK
 let firebaseInitialized = false;
 
+function findServiceAccountFile() {
+  const possiblePaths = [
+    path.join(__dirname, 'serviceAccount.json'),
+    path.join(__dirname, 'serviceAccountKey.json'),
+    path.join(__dirname, 'db', 'serviceAccount.json'),
+    path.join(__dirname, 'db', 'serviceAccountKey.json')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 function initFirebase() {
   if (firebaseInitialized) return;
   
   try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    const serviceAccountFile = findServiceAccountFile();
+    if (serviceAccountFile) {
+      const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountFile, 'utf8'));
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount)
       });
       firebaseInitialized = true;
-      console.log('[Auth] Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT');
+      console.log(`[Auth] Firebase Admin initialized via ${path.basename(serviceAccountFile)}`);
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = typeof process.env.FIREBASE_SERVICE_ACCOUNT === 'string'
+        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+        : process.env.FIREBASE_SERVICE_ACCOUNT;
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      firebaseInitialized = true;
+      console.log('[Auth] Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT env var');
     } else if (process.env.FIREBASE_PROJECT_ID) {
       admin.initializeApp({
         projectId: process.env.FIREBASE_PROJECT_ID
@@ -22,7 +47,7 @@ function initFirebase() {
       firebaseInitialized = true;
       console.log(`[Auth] Firebase Admin initialized with projectId: ${process.env.FIREBASE_PROJECT_ID}`);
     } else {
-      console.warn('[Auth] No Firebase credentials supplied in environment variables (FIREBASE_PROJECT_ID / FIREBASE_SERVICE_ACCOUNT). Token verification will operate in mock test mode.');
+      console.warn('[Auth] No serviceAccount.json or FIREBASE_PROJECT_ID supplied. Token verification operating in mock mode.');
     }
   } catch (err) {
     console.error('[Auth] Failed to initialize Firebase Admin:', err.message);

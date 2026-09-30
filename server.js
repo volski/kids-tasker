@@ -1241,6 +1241,35 @@ app.get('/api/tts', async (req, res) => {
   }
 });
 
+// --- Firebase Config Endpoint for Frontend ---
+app.get('/api/auth/config', (req, res) => {
+  try {
+    const possiblePaths = [
+      path.join(__dirname, 'firebaseConfig.json'),
+      path.join(__dirname, 'db', 'firebaseConfig.json')
+    ];
+    let config = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        try {
+          config = JSON.parse(fs.readFileSync(p, 'utf8'));
+          break;
+        } catch (e) {}
+      }
+    }
+    if (!config && process.env.FIREBASE_CONFIG) {
+      try {
+        config = typeof process.env.FIREBASE_CONFIG === 'string'
+          ? JSON.parse(process.env.FIREBASE_CONFIG)
+          : process.env.FIREBASE_CONFIG;
+      } catch (e) {}
+    }
+    res.json({ success: true, config: config || null });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // --- Device Pairing API Endpoints ---
 app.post('/api/devices/init-pairing', (req, res) => {
   try {

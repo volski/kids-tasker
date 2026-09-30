@@ -34,9 +34,20 @@ export class FirebaseAuthService {
     this.initFirebase();
   }
 
-  private initFirebase() {
+  private async initFirebase() {
     try {
-      const config = (window as any).__ENV__?.FIREBASE_CONFIG || DEFAULT_FIREBASE_CONFIG;
+      let config = (window as any).__ENV__?.FIREBASE_CONFIG;
+      if (!config) {
+        try {
+          const res = await fetch('/api/auth/config');
+          const data = await res.json();
+          if (data && data.success && data.config) {
+            config = data.config;
+          }
+        } catch (e) {}
+      }
+      if (!config) config = DEFAULT_FIREBASE_CONFIG;
+
       const app = getApps().length === 0 ? initializeApp(config) : getApp();
       this.auth = getAuth(app);
       
