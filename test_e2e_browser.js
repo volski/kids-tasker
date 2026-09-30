@@ -42,7 +42,7 @@ async function runBrowserTests() {
     const pageParent = await contextParent.newPage();
 
     await pageParent.goto(`${BASE_URL}/#/parent`, { waitUntil: 'domcontentloaded' });
-    await pageParent.waitForSelector('app-parent-shell', { timeout: 5000 });
+    await pageParent.waitForSelector('app-parent-shell', { state: 'attached', timeout: 5000 });
     await pageParent.waitForTimeout(500);
 
     const parentContent = await pageParent.content();

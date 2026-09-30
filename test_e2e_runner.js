@@ -57,18 +57,21 @@ async function runFullE2ETestSuite() {
           }
         ]
       }
-    ],
-    settings: {
-      resetTime: '06:00',
-      audio: {
-        presets: [
-          { id: 'audio_1', type: 'audio', name: 'test.mp3', value: 'test.mp3' }
-        ]
-      },
-      bypassSchedule: { enabled: false, schedule: {} }
-    }
+    ]
   };
+
+  const initialSettings = {
+    resetTime: '06:00',
+    audio: {
+      presets: [
+        { id: 'audio_1', type: 'audio', name: 'test.mp3', value: 'test.mp3' }
+      ]
+    },
+    bypassSchedule: { enabled: false, schedule: {} }
+  };
+
   fs.writeFileSync(path.join(TEST_DB_DIR, 'tasks.json'), JSON.stringify(initialTasks, null, 2));
+  fs.writeFileSync(path.join(TEST_DB_DIR, 'settings.json'), JSON.stringify(initialSettings, null, 2));
 
   const env = { ...process.env, PORT: TEST_PORT, DB_DIR: TEST_DB_DIR };
   const serverProcess = spawn('node', ['server.js'], { env, cwd: __dirname });
