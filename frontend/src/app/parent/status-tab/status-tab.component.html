@@ -1,0 +1,106 @@
+<div class="space-y-6">
+  <div class="flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <h2 class="text-2xl font-black text-white">סטטוס משימות יומי</h2>
+      <p class="text-sm text-slate-400">{{ currentDate }}</p>
+    </div>
+    <div class="flex gap-3">
+      <div class="px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl text-center">
+        <div class="text-xs text-slate-400 font-medium">סך הכל משימות</div>
+        <div class="text-xl font-black text-white">{{ overallStats().completedTasks }} / {{ overallStats().totalTasks }}</div>
+      </div>
+      <div class="px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl text-center">
+        <div class="text-xs text-slate-400 font-medium">אחוז ביצוע כולל</div>
+        <div class="text-xl font-black text-indigo-400">{{ overallStats().overallPct }}%</div>
+      </div>
+      <div class="px-4 py-2 bg-slate-900 border border-slate-800 rounded-2xl text-center flex flex-col justify-center">
+        <div class="text-xs text-slate-400 font-medium">סטטוס טלוויזיה</div>
+        <div class="text-sm font-black" [ngClass]="overallStats().allDone ? 'text-emerald-400' : (isBypass() ? 'text-purple-400' : 'text-rose-400')">
+          {{ overallStats().allDone ? 'מותרת להדלקה ✔' : (isBypass() ? 'מותרת (מעקף הורים) 🔓' : 'חסומה (נותרו משימות) 🔒') }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  @if (children().length === 0) {
+    <div class="py-12 text-center text-slate-500 font-bold">אין ילדים מוגדרים. עבור ללשונית "ניהול ילדים ומשימות" להוספה.</div>
+  }
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    @for (child of children(); track child.id) {
+      @let stats = getChildStats(child);
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col gap-4">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-xl font-bold text-indigo-200">
+              {{ child.name.charAt(0) }}
+            </div>
+            <div>
+              <h3 class="text-xl font-black text-white flex items-center gap-2">
+                {{ child.name }}
+                @if (stats.isFinished) { <span>🎉</span> }
+              </h3>
+              <p class="text-xs text-slate-400 font-semibold">{{ stats.done }} מתוך {{ stats.total }} בוצעו ({{ stats.pct }}%)</p>
+            </div>
+          </div>
+          <span class="px-3 py-1 text-xs font-bold rounded-full" [ngClass]="stats.isFinished ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-300 border-slate-700 border'">
+            {{ stats.pct }}%
+          </span>
+        </div>
+
+        <!-- Tasks list -->
+        <div class="space-y-2">
+          @if (stats.enabledTasks.length === 0) {
+            <p class="text-xs text-slate-500 py-3 text-center">אין משימות</p>
+          } @else {
+            @for (task of stats.enabledTasks; track task.id) {
+              @let isDone = task.completed;
+              @let isPending = !isDone && task.pendingApproval;
+              @let timeStr = isDone && task.completedAt ? formatTime(task.completedAt) : null;
+              @let icon = task.icon || 'star';
+
+              <div class="flex items-center justify-between p-3 rounded-2xl transition" 
+                [ngClass]="isDone ? 'bg-emerald-950/40 border border-emerald-800/40 text-emerald-100' : (isPending ? 'bg-amber-950/40 border border-amber-800/50 text-amber-100' : 'bg-slate-950/60 border border-slate-800 text-slate-300')">
+                
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-8 h-8 rounded-lg bg-black/20 p-1 flex items-center justify-center flex-shrink-0">
+                    <img [src]="'/icons/' + icon + '.svg'" alt="" class="w-full h-full object-contain" (error)="onImageError($event)">
+                  </div>
+                  <div class="flex flex-col min-w-0">
+                    <span class="font-bold text-sm truncate" [ngClass]="isDone ? 'line-through text-emerald-300/80' : (isPending ? 'text-amber-200 font-bold' : 'text-white')">
+                      {{ task.title }}
+                    </span>
+                    
+                    @if (isDone) {
+                      @if (timeStr) {
+                        <span class="text-xs text-emerald-400 font-medium">הושלם בשעה {{ timeStr }}</span>
+                      } @else {
+                        <span class="text-xs text-emerald-400 font-medium">הושלם</span>
+                      }
+                    } @else if (isPending) {
+                      <span class="text-xs text-amber-400 font-semibold flex items-center gap-1"><span>⏳</span> ממתין לאישורך</span>
+                    } @else {
+                      <span class="text-xs text-slate-500">טרם בוצע</span>
+                    }
+                  </div>
+                </div>
+
+                @if (isDone) {
+                  <button (click)="toggleTaskFromParent(child.id, task.id)" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-emerald-600/50 hover:bg-emerald-600 text-white">בטל ביצוע</button>
+                } @else if (isPending) {
+                  <div class="flex items-center gap-1.5">
+                    <button (click)="handleApproveTask(child.id, task.id)" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md flex items-center gap-1 font-black">
+                      <span>✓</span> אשר ביצוע
+                    </button>
+                  </div>
+                } @else {
+                  <button (click)="toggleTaskFromParent(child.id, task.id)" class="px-3 py-1.5 rounded-xl text-xs font-bold transition bg-rose-700/50 hover:bg-rose-700 text-white">סמן כבוצע</button>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>
