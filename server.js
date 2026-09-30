@@ -1319,7 +1319,7 @@ app.get('/api/auth/config', (req, res) => {
 });
 
 // --- Device Pairing API Endpoints ---
-app.post('/api/devices/init-pairing', (req, res) => {
+const handleInitPairing = (req, res) => {
   try {
     const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
     const userAgent = req.headers['user-agent'] || 'unknown';
@@ -1334,11 +1334,14 @@ app.post('/api/devices/init-pairing', (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
-});
+};
 
-app.get('/api/devices/pairing-status', (req, res) => {
+app.post('/api/devices/init-pairing', handleInitPairing);
+app.post('/api/pairing/init', handleInitPairing);
+
+const handlePairingStatus = (req, res) => {
   try {
-    const { sessionId } = req.query;
+    const sessionId = req.query.sessionId || req.params.sessionId;
     if (!sessionId) return res.status(400).json({ paired: false, error: 'Missing sessionId' });
     const sessions = readPairingSessions();
     const sess = sessions[sessionId];
@@ -1350,7 +1353,11 @@ app.get('/api/devices/pairing-status', (req, res) => {
   } catch (err) {
     res.status(500).json({ paired: false, error: err.message });
   }
-});
+};
+
+app.get('/api/devices/pairing-status', handlePairingStatus);
+app.get('/api/pairing/status/:sessionId', handlePairingStatus);
+app.get('/api/pairing/status', handlePairingStatus);
 
 app.post('/api/devices/pair', verifyAuth, requireParentAuth, (req, res) => {
   try {
