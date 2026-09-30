@@ -28,7 +28,7 @@ function initFirebase() {
       const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountFile, 'utf8'));
       if (serviceAccount && serviceAccount.private_key && serviceAccount.client_email) {
         admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
+          credential: admin.cert(serviceAccount)
         });
         firebaseInitialized = true;
         console.log(`[Auth] Firebase Admin initialized via ${path.basename(serviceAccountFile)}`);
@@ -40,7 +40,7 @@ function initFirebase() {
         ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
         : process.env.FIREBASE_SERVICE_ACCOUNT;
       admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
+        credential: admin.cert(serviceAccount)
       });
       firebaseInitialized = true;
       console.log('[Auth] Firebase Admin initialized via FIREBASE_SERVICE_ACCOUNT env var');
