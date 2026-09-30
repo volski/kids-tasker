@@ -1,5 +1,9 @@
 # Dependencies
 node_modules/
+frontend/node_modules/
+
+# Angular dist is committed so the server can git pull without building
+# frontend/dist/ is intentionally NOT ignored
 
 # Runtime and local database files (preserves live instance data on server)
 db/*.json
