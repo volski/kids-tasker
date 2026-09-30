@@ -1786,15 +1786,15 @@ app.post('/api/parent/verify-pin', verifyAuth, (req, res) => {
 });
 
 // Set or change parent PIN (4-6 digits)
-app.post('/api/parent/set-pin', (req, res) => {
+app.post('/api/parent/set-pin', verifyAuth, (req, res) => {
   try {
     const { pin, confirmPin, currentPin } = req.body || {};
     const householdId = req.householdId || 'house_default';
     const data = readTasks(householdId);
     const existingPin = data.parentPin ? String(data.parentPin).trim() : null;
 
-    // If a PIN already exists, require valid currentPin
-    if (existingPin && existingPin.length >= 4) {
+    // If a PIN already exists, require valid currentPin unless caller is an authenticated parent user
+    if (existingPin && existingPin.length >= 4 && !req.user) {
       if (!currentPin || String(currentPin).trim() !== existingPin) {
         return res.status(401).json({ success: false, error: 'קוד ה-PIN הנוכחי אינו נכון.' });
       }
