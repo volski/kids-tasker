@@ -1,0 +1,98 @@
+{
+  "configVersion": 1,
+  "timestamp": 1790783298259,
+  "index": "/index.html",
+  "assetGroups": [
+    {
+      "name": "app-shell",
+      "installMode": "prefetch",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/chunk-3HZRSDWK.js",
+        "/chunk-5NNGV67N.js",
+        "/chunk-EXGC5AT6.js",
+        "/chunk-H6HG37TO.js",
+        "/chunk-N5ZOZGF5.js",
+        "/chunk-UWB2VUOK.js",
+        "/chunk-YAQVHOCL.js",
+        "/chunk-ZLSJ3CPH.js",
+        "/chunk-ZWUJ7EYX.js",
+        "/favicon.ico",
+        "/main-PDQBTD3S.js",
+        "/manifest.webmanifest",
+        "/polyfills-FFHMD2TL.js",
+        "/styles-GEALBEVM.css"
+      ],
+      "patterns": []
+    },
+    {
+      "name": "assets",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "urls": [
+        "/icons/pwa-192.png",
+        "/icons/pwa-512.png"
+      ],
+      "patterns": []
+    }
+  ],
+  "dataGroups": [
+    {
+      "name": "api-freshness",
+      "patterns": [
+        "\\/api\\/.*"
+      ],
+      "strategy": "freshness",
+      "maxSize": 5,
+      "maxAge": 0,
+      "timeoutMs": 10000,
+      "cacheQueryOptions": {
+        "ignoreVary": true
+      },
+      "version": 1
+    }
+  ],
+  "hashTable": {
+    "/chunk-3HZRSDWK.js": "e7d9a4a9b8b3ca63741bd56657cce57db6559f4f",
+    "/chunk-5NNGV67N.js": "5e22bfc75f5964c1bd826540626f62a68124a94e",
+    "/chunk-EXGC5AT6.js": "ea274420fdb5ddada7f4735717f0750dd9b09539",
+    "/chunk-H6HG37TO.js": "d7d7252470e2bc08db9ae5d768b7f6e98ffbfca3",
+    "/chunk-N5ZOZGF5.js": "72c62406fcbd7244ae936705a651588b50f352a1",
+    "/chunk-UWB2VUOK.js": "5f73305a8e8ce7bab731331a60f160ef48d0d656",
+    "/chunk-YAQVHOCL.js": "243805d91353576aaef08f8a8d634e4626fa45c4",
+    "/chunk-ZLSJ3CPH.js": "50a9b510f62600d166bf6d8a91d2574222efef2d",
+    "/chunk-ZWUJ7EYX.js": "31e88fc6051f5c6d585eac7b3d0db5d0b4ccc5b7",
+    "/favicon.ico": "9c39f434fe1261f68c5e3eefdf734630d99c5670",
+    "/icons/pwa-192.png": "68cf1d53e4242b8e57f7da9771945fa402dbbff5",
+    "/icons/pwa-512.png": "a6f95ba2c1edb4b1368456ba6f674eb2bf1d2285",
+    "/main-PDQBTD3S.js": "d92aa3c192c6aeb493916ab37a07147dba3ced98",
+    "/manifest.webmanifest": "198ba8479188374e6b5e12c281cda761aeb4a3fe",
+    "/polyfills-FFHMD2TL.js": "f49b49a155bc7d192db62a4c15d0a612b460a667",
+    "/styles-GEALBEVM.css": "daf23141f77902b5b47bf16bc84890777e1c1c4e"
+  },
+  "navigationUrls": [
+    {
+      "positive": true,
+      "regex": "^\\/.*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*\\.[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*$"
+    },
+    {
+      "positive": false,
+      "regex": "^\\/(?:.+\\/)?[^/]*__[^/]*\\/.*$"
+    }
+  ],
+  "navigationRequestStrategy": "performance"
+}

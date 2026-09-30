@@ -1,0 +1,126 @@
+<div class="bg-slate-950 text-slate-100 min-h-full flex flex-col selection:bg-indigo-500 selection:text-white" *ngIf="isUnlocked()">
+
+  <!-- Header -->
+  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-30 px-4 sm:px-8 py-4 shadow-md">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3 space-x-reverse">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-2xl shadow-lg shadow-indigo-900/30">
+          👑
+        </div>
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
+            לוח ניהול הורים
+          </h1>
+          <p class="text-xs sm:text-sm text-slate-400 font-medium">מעקב, עריכת ילדים ומשימות, היסטוריה ואינטגרציית בית חכם</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button (click)="promptResetDay()" aria-label="איפוס ליום חדש" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/50 shadow-sm transition flex items-center gap-1.5" title="איפוס משימות להיום בלבד - שומר את כל שמות הילדים וההיסטוריה!">
+          <span>🔄</span>
+          <span class="hidden sm:inline">איפוס ליום חדש</span>
+        </button>
+
+        <a routerLink="/" aria-label="לוח ילדים" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-sm transition flex items-center gap-1.5">
+          <span>📱</span>
+          <span class="hidden sm:inline">לוח ילדים</span>
+        </a>
+
+        <!-- Install App (Android/Chrome/Edge: native prompt) -->
+        @if (pwa.canInstall()) {
+          <button (click)="pwa.promptInstall()" aria-label="התקן אפליקציה"
+            class="px-3 py-2 rounded-xl text-xs font-bold bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500/50 shadow-sm transition animate-pulse flex items-center gap-1.5">
+            <span>📲</span>
+            <span class="hidden sm:inline">התקן אפליקציה</span>
+          </button>
+        }
+
+        <!-- Install hint (iOS Safari: manual flow) -->
+        @if (pwa.isIosSafari() && !pwa.isInstalled()) {
+          <div class="relative">
+            <button (click)="showIosHint = !showIosHint" aria-label="הוראות התקנה ב-iOS"
+              class="px-3 py-2 rounded-xl text-xs font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 shadow-sm transition flex items-center gap-1.5">
+              <span>📲</span>
+              <span class="hidden sm:inline">התקן</span>
+            </button>
+            @if (showIosHint) {
+              <div class="absolute top-full left-0 mt-2 w-52 bg-slate-800 border border-slate-600 rounded-xl p-3 text-xs text-slate-200 text-right shadow-2xl z-50 leading-relaxed">
+                לחץ על <strong>⬆️ שתף</strong> ואז<br>
+                <strong>"הוסף למסך הבית"</strong>
+              </div>
+            }
+          </div>
+        }
+
+        <button (click)="lockParentDashboard()" aria-label="נעל לוח הורים" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 shadow-sm transition flex items-center gap-1.5" title="נעל את לוח ההורים">
+          <span>🔒</span>
+          <span class="hidden sm:inline">נעל</span>
+        </button>
+
+        <button (click)="reconnectSocket()" aria-label="סטטוס חיבור בזמן אמת" title="לחץ לחיבור מחדש" class="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition" [ngClass]="isConnected() ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-300' : 'bg-rose-950/60 border-rose-800/60 text-rose-300 animate-pulse'">
+          <span class="w-2.5 h-2.5 rounded-full" [ngClass]="isConnected() ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50' : 'bg-rose-500 animate-pulse'"></span>
+          <span class="hidden sm:inline">{{ isConnected() ? 'מחובר' : 'מתחבר...' }}</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <div class="bg-slate-900 border-b border-slate-800 px-4 sm:px-8">
+    <div class="max-w-7xl mx-auto flex gap-2 sm:gap-4 overflow-x-auto py-2">
+      <a routerLink="status" aria-label="סטטוס משימות היום" [class]="getTabClass('status')">
+        <span>📊</span>
+        <span class="hidden sm:inline">סטטוס משימות היום</span>
+      </a>
+      <a routerLink="manage" aria-label="ניהול ילדים ומשימות" [class]="getTabClass('manage')">
+        <span>✏️</span>
+        <span class="hidden sm:inline">ניהול ילדים ומשימות</span>
+      </a>
+      <a routerLink="history" aria-label="היסטוריית משימות" [class]="getTabClass('history')">
+        <span>📅</span>
+        <span class="hidden sm:inline">היסטוריית משימות</span>
+      </a>
+      <a routerLink="hass" aria-label="בית חכם" [class]="getTabClass('hass')">
+        <span>🏠</span>
+        <span class="hidden sm:inline">בית חכם</span>
+      </a>
+      <a routerLink="settings" aria-label="הגדרות" [class]="getTabClass('settings')">
+        <span>⚙️</span>
+        <span class="hidden sm:inline">הגדרות</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+    <router-outlet></router-outlet>
+  </main>
+
+  <footer class="py-4 text-center text-xs text-slate-500 border-t border-slate-900">
+    לוח ניהול הורים &bull; kids-tasker &bull; שינויים נשמרים ישירות לקובץ tasks.json
+  </footer>
+
+  <!-- Toast Notification -->
+  @if (toastMessage()) {
+    <div 
+      class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl font-bold text-sm flex items-center gap-2 transition-all duration-300 opacity-100 pointer-events-auto transform translate-y-0"
+      [ngClass]="toastType() === 'success' ? 'bg-emerald-600 text-white shadow-emerald-950/50' : 'bg-rose-600 text-white'"
+    >
+      {{ toastMessage() }}
+    </div>
+  }
+</div>
+
+@if (showPinModal()) {
+  <app-pin-modal (verified)="onPinVerified()" (closed)="onPinClosed()"></app-pin-modal>
+}
+
+@if (showResetConfirm()) {
+  <app-confirm-modal
+    title="איפוס יום"
+    message="האם אתה בטוח שברצונך לאפס את כל המשימות? (הפעולה לא הפיכה)"
+    confirmText="אפס עכשיו"
+    (onConfirm)="executeResetDay()"
+    (onCancel)="showResetConfirm.set(false)">
+  </app-confirm-modal>
+}

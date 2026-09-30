@@ -1,0 +1,89 @@
+<div class="space-y-6">
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-black text-white">היסטוריית משימות</h2>
+      <p class="text-sm text-slate-400">צפייה בביצועי משימות ושעות השלמה של הילדים לפי ימים</p>
+    </div>
+
+    <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto">
+      <label for="history-date-select" class="text-sm font-bold text-slate-300 hidden sm:block">בחר תאריך:</label>
+      <select 
+        id="history-date-select" 
+        [ngModel]="selectedDate()" 
+        (ngModelChange)="loadHistory($event)"
+        class="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500 min-w-0"
+      >
+        @for (d of availableDates(); track d) {
+          <option [value]="d">{{ d }} ({{ formatDateDisplay(d) }})</option>
+        }
+      </select>
+      <button (click)="loadHistory(selectedDate())" class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-bold text-sm border border-slate-700 transition">
+        רענן 🔄
+      </button>
+    </div>
+  </div>
+
+  <!-- History Summary for Selected Date -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+      <div class="text-xs text-slate-400 font-medium">תאריך נבחר</div>
+      <div class="text-lg font-black text-white">{{ selectedDate() }}</div>
+      <div class="text-xs text-indigo-400 font-semibold mt-0.5">{{ formatDateDisplay(selectedDate()) }}</div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+      <div class="text-xs text-slate-400 font-medium">משימות שהושלמו ביום זה</div>
+      <div class="text-2xl font-black text-emerald-400">{{ completedCount }}</div>
+    </div>
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center">
+      <div class="text-xs text-slate-400 font-medium">פעולות שנרשמו ביומן</div>
+      <div class="text-2xl font-black text-white">{{ historyEntries().length }}</div>
+    </div>
+  </div>
+
+  <!-- History Table / Activity Timeline -->
+  <div class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl">
+    <h3 class="text-xl font-black text-white mb-4 flex items-center gap-2">
+      <span>📜</span>
+      <span>יומן פעילות ליום הנבחר</span>
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-right border-collapse text-sm">
+        <thead>
+          <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase tracking-wider font-bold">
+            <th class="py-3 px-4">שעה</th>
+            <th class="py-3 px-4">ילד/ה</th>
+            <th class="py-3 px-4">אייקון ומשימה</th>
+            <th class="py-3 px-4">סטטוס פעולה</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800/60 font-medium">
+          @if (historyEntries().length === 0) {
+            <tr>
+              <td colspan="4" class="py-8 text-center text-slate-500 font-bold">לא נמצאו רישומי פעילות לתאריך זה</td>
+            </tr>
+          } @else {
+            @for (entry of historyEntries(); track entry.timestamp) {
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="py-3 px-4 font-mono text-slate-300">{{ formatTime(entry.timestamp) }}</td>
+                <td class="py-3 px-4 font-bold text-white">{{ entry.childName }}</td>
+                <td class="py-3 px-4 text-slate-200">
+                  <div class="flex items-center gap-2">
+                    <img [src]="'/icons/' + (entry.icon || 'star') + '.svg'" class="w-5 h-5 object-contain" alt="" (error)="onImageError($event)">
+                    <span>{{ entry.taskTitle }}</span>
+                  </div>
+                </td>
+                <td class="py-3 px-4">
+                  @if (entry.completed) {
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-950/80 border border-emerald-700/60 text-emerald-300">הושלם ✔</span>
+                  } @else {
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-950/80 border border-rose-700/60 text-rose-300">בוטל ❌</span>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
