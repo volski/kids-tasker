@@ -87,11 +87,11 @@ export class FirebaseAuthService {
     }
   }
 
-  public async getIdToken(): Promise<string | null> {
+  public async getIdToken(forceRefresh = false): Promise<string | null> {
     const user = this.userSignal();
     if (!user) return null;
     try {
-      return await user.getIdToken();
+      return await user.getIdToken(forceRefresh);
     } catch {
       return null;
     }
