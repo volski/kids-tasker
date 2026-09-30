@@ -42,7 +42,7 @@ export class SettingsTabComponent implements OnInit {
   async loadSettings() {
     try {
       const s = await this.settingsService.getSettings().toPromise();
-      this.settings.set(s?.settings || {});
+      this.settings.set(s || {});
     } catch (e: any) {
       this.shell.showToast('שגיאה בטעינת הגדרות: ' + e.message, 'error');
     }
