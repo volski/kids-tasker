@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const admin = require('firebase-admin');
+const { getAuth } = require('firebase-admin/auth');
 const { getDeviceByToken, getHouseholdIdForUser } = require('./db_manager');
 
 // Initialize Firebase Admin SDK
@@ -82,7 +83,7 @@ async function verifyAuth(req, res, next) {
     }
 
     try {
-      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const decodedToken = await getAuth().verifyIdToken(idToken);
       req.user = decodedToken;
       req.householdId = getHouseholdIdForUser(decodedToken.uid, decodedToken.email);
       req.isParent = true;
