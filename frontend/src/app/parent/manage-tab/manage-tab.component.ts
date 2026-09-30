@@ -132,35 +132,34 @@ export class ManageTabComponent implements OnInit {
     }
   }
 
-  async handleUpdateTask(childId: string, task: Task, silent = false) {
-    if (!task.title.trim()) return;
+  async handleUpdateTask(childId: string, taskId: string, patch: Partial<Task>, silent = false) {
+    if (patch.title !== undefined && !patch.title.trim()) return;
 
-    this.savingTasks.add(task.id);
+    this.savingTasks.add(taskId);
     try {
-      const res = await fetch(`/api/children/${childId}/tasks/${task.id}`, {
+      const res = await fetch(`/api/children/${childId}/tasks/${taskId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: task.title,
-          icon: task.icon,
-          requiresApproval: task.requiresApproval,
-          audioFeedback: task.audioFeedback,
-          enabled: task.enabled
-        })
+        body: JSON.stringify(patch)
       });
       if (!res.ok) throw new Error('Failed to update task');
       
-      if (!silent) this.shell.showToast(`המשימה "${task.title}" עודכנה ונשמרה בהצלחה! ✓`);
-      // Update data so it doesn't revert while polling
-      this.taskService.loadData().subscribe();
+      const data = await res.json();
+      if (data.task) {
+        this.taskService.applyTaskDelta({
+          childId,
+          taskId,
+          changes: patch
+        });
+      }
+      
+      if (!silent) this.shell.showToast('המשימה עודכנה ונשמרה בהצלחה! ✓');
     } catch (err: any) {
       if (!silent) this.shell.showToast('שגיאה בעדכון משימה: ' + err.message, 'error');
     } finally {
-      this.savingTasks.delete(task.id);
+      this.savingTasks.delete(taskId);
     }
   }
-
-  
   promptDeleteTask(childId: string, task: Task) {
     this.showDeleteTaskModal.set({ childId, task });
   }
