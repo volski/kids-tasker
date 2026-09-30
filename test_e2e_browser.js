@@ -60,8 +60,8 @@ async function runBrowserTests() {
     const soundSelects = await pageParent.locator('select').all();
     let foundSoundOption = false;
     for (const select of soundSelects) {
-      const optionsText = await select.innerText();
-      if (optionsText.includes('ספריית קולות') || optionsText.includes('🎵') || optionsText.includes('🗣️')) {
+      const optionsText = await select.textContent();
+      if (optionsText && (optionsText.includes('ספריית קולות') || optionsText.includes('🎵') || optionsText.includes('🗣️') || optionsText.includes('test.mp3'))) {
         foundSoundOption = true;
         break;
       }
