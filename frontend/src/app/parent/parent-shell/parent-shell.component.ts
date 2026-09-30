@@ -43,9 +43,11 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.checkAccess();
 
-    this.socketSub = this.socketService.onTaskUpdated.subscribe(() => {
+    this.socketSub = this.socketService.onTaskUpdated.subscribe((data) => {
       // Data update is handled by the services, but we ensure connection state is updated
       this.isConnected.set(this.socketService.connected);
+      this.taskService.fullData.set(data);
+      this.taskService.appData.set(data.children || []);
     });
 
     setInterval(() => {

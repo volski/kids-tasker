@@ -214,8 +214,11 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
     if (feedback) this.playAudio(feedback, d);
 
     this.taskService.toggleTask(childId, taskId, false).subscribe({
-      error: () => this.fetchTasks(),
-      complete: () => setTimeout(() => this.pendingToggles.delete(key), 300),
+      next: () => setTimeout(() => this.pendingToggles.delete(key), 300),
+      error: () => {
+        this.pendingToggles.delete(key);
+        this.fetchTasks();
+      }
     });
   }
 
