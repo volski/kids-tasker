@@ -44,7 +44,7 @@ export class ManageTabComponent implements OnInit {
   }
 
   getAudioOptions() {
-    return this.audioPresets();
+    return this.taskService.fullData()?.settings?.audio?.presets || [];
   }
 
   async handleCreateChild() {
