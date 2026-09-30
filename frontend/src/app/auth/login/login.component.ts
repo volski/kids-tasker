@@ -11,10 +11,28 @@ import { FirebaseAuthService } from '../../core/services/firebase-auth.service';
   imports: [CommonModule, FormsModule],
   template: `
     <div class="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
-      <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
+      <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
         
+        <!-- Navigation Switcher: Parent Auth vs Child Display Pairing -->
+        <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-950 rounded-2xl border border-slate-800/80">
+          <button
+            class="py-2.5 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md flex items-center justify-center gap-1.5"
+          >
+            <span>👑</span>
+            <span>כניסת הורים / הרשמה</span>
+          </button>
+
+          <button
+            (click)="goToPairing()"
+            class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-400 hover:text-white hover:bg-slate-900 transition flex items-center justify-center gap-1.5"
+          >
+            <span>📺</span>
+            <span>חיבור מסך ילדים</span>
+          </button>
+        </div>
+
         <!-- Header -->
-        <div class="text-center space-y-2">
+        <div class="text-center space-y-2 pt-1">
           <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-indigo-900/40">
             👑
           </div>
@@ -104,6 +122,14 @@ import { FirebaseAuthService } from '../../core/services/firebase-auth.service';
           </div>
         }
 
+        <!-- Direct Child Display Pairing Shortcut -->
+        <div class="pt-4 border-t border-slate-800/80 text-center">
+          <button (click)="goToPairing()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl text-xs sm:text-sm transition flex items-center justify-center gap-2 border border-slate-700">
+            <span>📺</span>
+            <span>רוצה לחבר מסך ילדים חדש (QR Code)? לחץ כאן ➔</span>
+          </button>
+        </div>
+
       </div>
     </div>
   `
@@ -128,6 +154,10 @@ export class LoginComponent implements OnInit {
         this.pairingCode.set(params['code']);
       }
     });
+  }
+
+  public goToPairing() {
+    this.router.navigate(['/pairing']);
   }
 
   public async handleGoogleLogin() {

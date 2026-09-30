@@ -11,16 +11,34 @@ import { SocketService } from '../services/socket.service';
   imports: [CommonModule],
   template: `
     <div class="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 selection:bg-indigo-500 selection:text-white">
-      <div class="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl text-center space-y-6">
+      <div class="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
         
+        <!-- Navigation Switcher: Parent Auth vs Child Display Pairing -->
+        <div class="grid grid-cols-2 gap-2 p-1.5 bg-slate-950 rounded-2xl border border-slate-800/80">
+          <button
+            (click)="goToLogin()"
+            class="py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm text-slate-400 hover:text-white hover:bg-slate-900 transition flex items-center justify-center gap-1.5"
+          >
+            <span>👑</span>
+            <span>כניסת הורים / הרשמה</span>
+          </button>
+
+          <button
+            class="py-2.5 px-3 bg-gradient-to-r from-amber-500 to-indigo-600 text-white font-bold text-xs sm:text-sm rounded-xl transition shadow-md flex items-center justify-center gap-1.5"
+          >
+            <span>📺</span>
+            <span>חיבור מסך ילדים</span>
+          </button>
+        </div>
+
         <!-- Header / Logo -->
-        <div class="flex items-center justify-center gap-3">
+        <div class="flex items-center justify-center gap-3 pt-2">
           <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-3xl shadow-lg shadow-indigo-900/40">
             📺
           </div>
           <div class="text-right">
-            <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">חיבור מסך חדש</h1>
-            <p class="text-xs sm:text-sm text-slate-400 font-medium">סריקת הברקוד לשיוך לוח המשימות למשפחה</p>
+            <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">חיבור מסך ילדים חדש</h1>
+            <p class="text-xs sm:text-sm text-slate-400 font-medium">סריקת הברקוד או הזנת הקוד לשיוך לוח המשימות למשפחה</p>
           </div>
         </div>
 
@@ -72,13 +90,21 @@ import { SocketService } from '../services/socket.service';
           </div>
         }
 
+        <!-- Direct Parent Login Shortcut -->
+        <div class="pt-4 border-t border-slate-800/80">
+          <button (click)="goToLogin()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl text-xs sm:text-sm transition flex items-center justify-center gap-2 border border-slate-700">
+            <span>👑</span>
+            <span>רוצה להיכנס כהורה לחשבון / להירשם? לחץ כאן ➔</span>
+          </button>
+        </div>
+
       </div>
     </div>
   `
 })
 export class DevicePairingComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
-  private router = inject(Router);
+  public router = inject(Router);
   private socketService = inject(SocketService);
 
   public isLoading = signal<boolean>(true);
@@ -97,63 +123,67 @@ export class DevicePairingComponent implements OnInit, OnDestroy {
     if (this.pollTimer) clearInterval(this.pollTimer);
   }
 
+  public goToLogin() {
+    this.router.navigate(['/login']);
+  }
+
   public async initSession() {
     this.isLoading.set(true);
     this.errorMsg.set(null);
 
-    this.http.post<any>('/api/devices/init-pairing', {}).subscribe({
+    this.http.post<any>('/api/pairing/init', {}).subscribe({
       next: async (res) => {
-        if (res && res.success) {
+        this.isLoading.set(false);
+        if (res && res.code && res.sessionId) {
           this.pairingCode.set(res.code);
           this.sessionId.set(res.sessionId);
-          
-          const pairingUrl = `${window.location.origin}/#/pair?code=${res.code}`;
+
+          // Generate QR Code URL pointing to /login?code=KIDS-XXXX
+          const baseUrl = window.location.origin;
+          const pairUrl = `${baseUrl}/#/login?code=${res.code}`;
+
           try {
-            const dataUrl = await QRCode.toDataURL(pairingUrl, { width: 300, margin: 1 });
+            const dataUrl = await QRCode.toDataURL(pairUrl, { width: 300, margin: 2 });
             this.qrDataUrl.set(dataUrl);
           } catch (e) {
-            console.error('Failed to generate QR code:', e);
+            console.error('Failed to generate QR Code', e);
           }
 
-          this.isLoading.set(false);
-          this.startListeningForPairing(res.sessionId);
+          // Start polling for pairing completion status
+          this.startPollingStatus(res.sessionId);
         } else {
-          this.errorMsg.set(res.error || 'שגיאה ביצירת קוד חיבור');
-          this.isLoading.set(false);
+          this.errorMsg.set('שגיאה ביצירת קוד חיבור');
         }
       },
       error: (err) => {
-        this.errorMsg.set('שגיאת תקשורת בחיבור לשרת');
         this.isLoading.set(false);
+        this.errorMsg.set(err.error?.error || 'שגיאת תקשורת מול השרת');
       }
     });
   }
 
-  private startListeningForPairing(sessionId: string) {
-    // 1. WebSocket listener for instant pairing
-    this.socketService.on(`device_paired_${sessionId}`, (data: any) => {
-      if (data && data.deviceToken) {
-        this.onDevicePaired(data.deviceToken);
-      }
-    });
-
-    // 2. Fallback HTTP Polling every 3 seconds
+  private startPollingStatus(sessId: string) {
     if (this.pollTimer) clearInterval(this.pollTimer);
+
     this.pollTimer = setInterval(() => {
-      this.http.get<any>(`/api/devices/pairing-status?sessionId=${sessionId}`).subscribe({
-        next: (status) => {
-          if (status && status.paired && status.deviceToken) {
-            this.onDevicePaired(status.deviceToken);
-          }
-        },
-        error: () => {}
-      });
-    }, 3000);
-  }
+      this.http.get<any>(`/api/pairing/status/${sessId}`).subscribe({
+        next: (res) => {
+          if (res && res.status === 'paired' && res.deviceToken) {
+            clearInterval(this.pollTimer);
+            // Save device token locally & set active household ID
+            localStorage.setItem('kids_tasker_device_token', res.deviceToken);
+            if (res.householdId) {
+              localStorage.setItem('kids_tasker_household_id', res.householdId);
+            }
+            
+            // Connect Socket.io with new device credentials
+            this.socketService.connect();
 
-  private onDevicePaired(deviceToken: string) {
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    localStorage.setItem('kids_tasker_device_token', deviceToken);
-    this.router.navigate(['/']);
+            // Redirect immediately to Kids Board
+            this.router.navigate(['/']);
+          }
+        }
+      });
+    }, 2000);
   }
 }
