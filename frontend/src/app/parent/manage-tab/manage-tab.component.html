@@ -156,7 +156,7 @@
 
                   <select
                     [(ngModel)]="task.icon"
-                    (change)="handleUpdateTask(child.id, task, true)"
+                     (change)="handleUpdateTask(child.id, task.id, { icon: task.icon }, true)"
                     class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 flex-shrink-0"
                   >
                     <option value="none">⬜ ללא אייקון</option>
@@ -168,8 +168,8 @@
                   <input
                     type="text"
                     [(ngModel)]="task.title"
-                    (blur)="handleUpdateTask(child.id, task, true)"
-                    (keyup.enter)="handleUpdateTask(child.id, task)"
+                     (blur)="handleUpdateTask(child.id, task.id, { title: task.title }, true)"
+                     (keyup.enter)="handleUpdateTask(child.id, task.id, { title: task.title })"
                     class="bg-slate-900/60 border border-slate-800 focus:border-indigo-500 text-white font-bold text-sm px-3 py-1.5 rounded-xl flex-1 focus:outline-none transition min-w-[120px]"
                   >
                 </div>
@@ -179,7 +179,7 @@
                   <div class="flex flex-wrap items-center gap-2">
                     <select
                       [(ngModel)]="task.audioFeedback"
-                      (change)="handleUpdateTask(child.id, task, true)"
+                       (change)="handleUpdateTask(child.id, task.id, { icon: task.icon }, true)"
                       class="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 w-36 sm:w-44"
                     >
                       <option value="">(ללא צליל)</option>
@@ -194,7 +194,7 @@
                       <input 
                         type="checkbox" 
                         [(ngModel)]="task.requiresApproval"
-                        (change)="handleUpdateTask(child.id, task, true)"
+                         (change)="handleUpdateTask(child.id, task.id, { icon: task.icon }, true)"
                         class="w-4 h-4 rounded accent-indigo-600"
                       >
                       <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">אישור הורה 🔒</span>
@@ -204,7 +204,7 @@
                       <input 
                         type="checkbox" 
                         [(ngModel)]="task.enabled"
-                        (change)="handleUpdateTask(child.id, task, true)"
+                         (change)="handleUpdateTask(child.id, task.id, { icon: task.icon }, true)"
                         class="w-4 h-4 rounded accent-indigo-600"
                       >
                       <span class="text-xs font-semibold text-slate-300 whitespace-nowrap">פעיל ✅</span>
@@ -212,7 +212,7 @@
                   </div>
 
                   <div class="flex items-center gap-1.5">
-                    <button (click)="handleUpdateTask(child.id, task)" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow active:scale-95">
+                    <button  (click)="handleUpdateTask(child.id, task.id, { title: task.title, icon: task.icon, requiresApproval: task.requiresApproval, audioFeedback: task.audioFeedback, enabled: task.enabled })" class="px-3 py-1.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow active:scale-95">
                       <span>💾</span>
                     </button>
                     @if (savingTasks.has(task.id)) {
