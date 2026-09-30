@@ -85,6 +85,9 @@ export class FirebaseAuthService {
       await signOut(this.auth);
       this.userSignal.set(null);
     }
+    localStorage.removeItem('kids_tasker_device_token');
+    localStorage.removeItem('kids_tasker_household_id');
+    sessionStorage.removeItem('kids_tasker_parent_unlocked');
   }
 
   public async getIdToken(forceRefresh = false): Promise<string | null> {

@@ -44,17 +44,20 @@ function getHouseholdTasksPath(householdId) {
 function readHouseholdTasks(householdId, defaultData) {
   const file = getHouseholdTasksPath(householdId);
   if (!fs.existsSync(file)) {
-    // If fallback single-tenant tasks.json exists, copy/migrate it
-    const legacyFile = path.join(DB_DIR, 'tasks.json');
-    if (fs.existsSync(legacyFile)) {
-      const legacyData = readJsonFile(legacyFile, null);
-      if (legacyData) {
-        writeJsonFile(file, legacyData);
-        return legacyData;
+    // Only migrate legacy single-tenant DB file for default legacy household
+    if (householdId === 'house_default' || householdId === 'default') {
+      const legacyFile = path.join(DB_DIR, 'tasks.json');
+      if (fs.existsSync(legacyFile)) {
+        const legacyData = readJsonFile(legacyFile, null);
+        if (legacyData) {
+          writeJsonFile(file, legacyData);
+          return legacyData;
+        }
       }
     }
-    writeJsonFile(file, defaultData);
-    return defaultData;
+    const freshData = defaultData ? JSON.parse(JSON.stringify(defaultData)) : {};
+    writeJsonFile(file, freshData);
+    return freshData;
   }
   return readJsonFile(file, defaultData);
 }

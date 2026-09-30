@@ -30,11 +30,14 @@ export class SocketService implements OnDestroy {
       this.taskDelta$.next(delta);
     });
 
-    this.socket.on('device_revoked', () => {
-      const devToken = localStorage.getItem('kids_tasker_device_token');
-      if (devToken) {
-        localStorage.removeItem('kids_tasker_device_token');
-        window.location.href = '/#/pairing';
+    this.socket.onAny((event: string, data: any) => {
+      if (event === 'device_revoked' || event.startsWith('device_revoked_')) {
+        const devToken = localStorage.getItem('kids_tasker_device_token');
+        if (devToken) {
+          localStorage.removeItem('kids_tasker_device_token');
+          localStorage.removeItem('kids_tasker_household_id');
+          window.location.href = '/#/pairing';
+        }
       }
     });
   }
