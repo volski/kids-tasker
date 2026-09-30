@@ -71,8 +71,27 @@ async function runFullE2ETestSuite() {
     bypassSchedule: { enabled: false, schedule: {} }
   };
 
+  const initialDevices = {
+    'dev_e2e_1': {
+      deviceId: 'dev_e2e_1',
+      deviceToken: 'test_token_paired_123',
+      householdId: 'house_default',
+      deviceName: 'Test Display Screen',
+      status: 'allowed'
+    }
+  };
+
   fs.writeFileSync(path.join(TEST_DB_DIR, 'tasks.json'), JSON.stringify(initialTasks, null, 2));
   fs.writeFileSync(path.join(TEST_DB_DIR, 'settings.json'), JSON.stringify(initialSettings, null, 2));
+  fs.writeFileSync(path.join(TEST_DB_DIR, 'devices.json'), JSON.stringify(initialDevices, null, 2));
+
+  const houseDefaultDir = path.join(TEST_DB_DIR, 'households', 'house_default');
+  fs.mkdirSync(houseDefaultDir, { recursive: true });
+  fs.writeFileSync(path.join(houseDefaultDir, 'tasks.json'), JSON.stringify(initialTasks, null, 2));
+
+  const houseTestDir = path.join(TEST_DB_DIR, 'households', 'house_test');
+  fs.mkdirSync(houseTestDir, { recursive: true });
+  fs.writeFileSync(path.join(houseTestDir, 'tasks.json'), JSON.stringify(initialTasks, null, 2));
 
   const env = { ...process.env, PORT: TEST_PORT, DB_DIR: TEST_DB_DIR };
   const serverProcess = spawn('node', ['server.js'], { env, cwd: __dirname });

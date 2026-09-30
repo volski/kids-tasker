@@ -207,26 +207,7 @@ const DEFAULT_HASS_CONFIG = {
 
 // Default initial tasks schema
 const DEFAULT_TASKS_DATA = {
-  children: [
-    {
-      id: "child_1",
-      name: "אביב",
-      tasks: [
-        { id: "t1", title: "צחצוח שיניים", completed: false, completedAt: null, icon: "toothbrush" },
-        { id: "t2", title: "התלבשות לבד", completed: false, completedAt: null, icon: "clothes" },
-        { id: "t3", title: "סידור תיק", completed: false, completedAt: null, icon: "backpack" }
-      ]
-    },
-    {
-      id: "child_2",
-      name: "דניאל",
-      tasks: [
-        { id: "t1", title: "צחצוח שיניים", completed: false, completedAt: null, icon: "toothbrush" },
-        { id: "t2", title: "התלבשות לבד", completed: false, completedAt: null, icon: "clothes" },
-        { id: "t3", title: "סידור תיק", completed: false, completedAt: null, icon: "backpack" }
-      ]
-    }
-  ],
+  children: [],
   history: [],
   lastActiveDate: getTodayDateString(),
   homeAssistant: { ...DEFAULT_HASS_CONFIG },

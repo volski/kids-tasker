@@ -77,6 +77,13 @@ async function runTests() {
   assert.strictEqual(readB.children[0].name, 'Child Beta');
   console.log('✓ Test 6: Multi-tenant household data isolation verified');
 
+  // Test 7: Verify new household starts with empty children array []
+  const houseNew = 'house_fresh_new';
+  const readNew = readHouseholdTasks(houseNew, { children: [] });
+  assert.ok(Array.isArray(readNew.children), 'Children must be array');
+  assert.strictEqual(readNew.children.length, 0, 'New household must start with 0 kids entries');
+  console.log('✓ Test 7: Verified new household starts completely clean with children: []');
+
   // Cleanup test DB
   if (fs.existsSync(process.env.DB_DIR)) {
     fs.rmSync(process.env.DB_DIR, { recursive: true, force: true });

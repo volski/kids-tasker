@@ -207,6 +207,34 @@ async function runTests() {
   }
   fs.mkdirSync(TEST_DB_DIR, { recursive: true });
 
+  const sampleTestTasks = {
+    children: [
+      {
+        id: "child_1",
+        name: "אביב",
+        tasks: [
+          { id: "t1", title: "צחצוח שיניים", completed: false, completedAt: null, icon: "toothbrush" },
+          { id: "t2", title: "התלבשות לבד", completed: false, completedAt: null, icon: "clothes" },
+          { id: "t3", title: "סידור תיק", completed: false, completedAt: null, icon: "backpack" }
+        ]
+      },
+      {
+        id: "child_2",
+        name: "דניאל",
+        tasks: [
+          { id: "t1", title: "צחצוח שיניים", completed: false, completedAt: null, icon: "toothbrush" },
+          { id: "t2", title: "התלבשות לבד", completed: false, completedAt: null, icon: "clothes" },
+          { id: "t3", title: "סידור תיק", completed: false, completedAt: null, icon: "backpack" }
+        ]
+      }
+    ],
+    history: []
+  };
+  fs.writeFileSync(path.join(TEST_DB_DIR, 'tasks.json'), JSON.stringify(sampleTestTasks, null, 2));
+  const houseTestDir = path.join(TEST_DB_DIR, 'households', 'house_test');
+  fs.mkdirSync(houseTestDir, { recursive: true });
+  fs.writeFileSync(path.join(houseTestDir, 'tasks.json'), JSON.stringify(sampleTestTasks, null, 2));
+
   // 1. Start Mock Home Assistant Server
   const mockHass = createMockHassServer();
   await new Promise(resolve => mockHass.server.listen(MOCK_HASS_PORT, resolve));
