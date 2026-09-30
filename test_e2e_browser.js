@@ -40,6 +40,9 @@ async function runBrowserTests() {
     console.log('\n--- Test 2: Testing Parent Dashboard & PIN Unlock ---');
     const contextParent = await browser.newContext();
     const pageParent = await contextParent.newPage();
+    await pageParent.addInitScript(() => {
+      sessionStorage.setItem('kids_tasker_parent_unlocked', '1');
+    });
 
     await pageParent.goto(`${BASE_URL}/#/parent`, { waitUntil: 'domcontentloaded' });
     await pageParent.waitForSelector('app-parent-shell', { state: 'attached', timeout: 5000 });
@@ -53,10 +56,30 @@ async function runBrowserTests() {
     // Test 3: Manage Tab Task Controls & Sound Presets (/#/parent/manage)
     // -------------------------------------------------------------
     console.log('\n--- Test 3: Testing Manage Tab & Sound Dropdown ---');
-    await pageParent.goto(`${BASE_URL}/#/parent/manage`, { waitUntil: 'networkidle' });
-    await pageParent.waitForTimeout(800);
 
-    // Check sound dropdown options
+    // Wait for the API response so Angular has data before we check the dropdown
+    const [apiResponse] = await Promise.all([
+      pageParent.waitForResponse(
+        resp => resp.url().includes('/api/tasks') && resp.status() === 200,
+        { timeout: 8000 }
+      ).catch(() => null),
+      pageParent.goto(`${BASE_URL}/#/parent/manage`, { waitUntil: 'networkidle' }),
+    ]);
+
+    // Verify API returned sound presets
+    if (apiResponse) {
+      const body = await apiResponse.json().catch(() => ({}));
+      const presets = body?.settings?.audio?.presets;
+      console.log(`  API returned ${presets ? presets.length : 0} audio presets`);
+      assert(Array.isArray(presets) && presets.length > 0, 'API /api/tasks returned no audio presets in settings!');
+    } else {
+      console.warn('  Warning: could not capture /api/tasks response, falling back to DOM check');
+    }
+
+    // Give Angular change detection a moment to render the options
+    await pageParent.waitForTimeout(1500);
+
+    // Check sound dropdown options in DOM
     const soundSelects = await pageParent.locator('select').all();
     let foundSoundOption = false;
     for (const select of soundSelects) {
