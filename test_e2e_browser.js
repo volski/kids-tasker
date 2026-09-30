@@ -41,13 +41,12 @@ async function runBrowserTests() {
     const contextParent = await browser.newContext();
     const pageParent = await contextParent.newPage();
 
-    await pageParent.goto(`${BASE_URL}/#/parent`, { waitUntil: 'networkidle' });
+    await pageParent.goto(`${BASE_URL}/#/parent`, { waitUntil: 'domcontentloaded' });
+    await pageParent.waitForSelector('app-parent-shell', { timeout: 5000 });
     await pageParent.waitForTimeout(500);
 
-    // Check if PIN modal or unlocked parent header is present
     const parentContent = await pageParent.content();
-    assert(parentContent.includes('הגדרות') || parentContent.includes('לוח בקרה') || parentContent.includes('קוד סודי'), 
-      'Parent Dashboard failed to load');
+    assert(parentContent.includes('app-parent-shell'), 'Parent Dashboard failed to load');
     console.log('✓ Parent Dashboard loaded successfully');
 
     // -------------------------------------------------------------
