@@ -277,7 +277,7 @@ function getHouseholdIdForUser(uid, email = '') {
   return householdId;
 }
 
-function getHouseholdInfo(householdId) {
+function getHouseholdInfo(householdId, currentUid) {
   if (!householdId) return null;
   const registry = readHouseholdsRegistry();
   const mappings = readUserMappings();
@@ -296,6 +296,19 @@ function getHouseholdInfo(householdId) {
     };
   });
 
+  const pendingMemberProfiles = (household.pendingMembers || []).map(mUid => {
+    const map = mappings[mUid] || {};
+    return {
+      uid: mUid,
+      email: map.email || '',
+      name: map.name || (map.email ? map.email.split('@')[0] : mUid),
+      role: 'pending',
+      joinedAt: map.joinedAt || new Date().toISOString()
+    };
+  });
+
+  const isPending = Boolean(currentUid && household.pendingMembers && household.pendingMembers.includes(currentUid));
+
   return {
     householdId: household.householdId,
     name: household.name || 'המשפחה שלי',
@@ -303,7 +316,10 @@ function getHouseholdInfo(householdId) {
     ownerUid: household.ownerUid,
     createdAt: household.createdAt,
     members: household.members || [],
+    pendingMembers: household.pendingMembers || [],
     memberProfiles,
+    pendingMemberProfiles,
+    isPending,
     isConfigured: household.isConfigured !== false
   };
 }
@@ -324,6 +340,7 @@ function createHousehold(ownerUid, ownerEmail, familyName) {
     ownerUid,
     createdAt: new Date().toISOString(),
     members: [ownerUid],
+    pendingMembers: [],
     isConfigured: true
   };
   writeHouseholdsRegistry(registry);
@@ -332,11 +349,12 @@ function createHousehold(ownerUid, ownerEmail, familyName) {
     uid: ownerUid,
     email: ownerEmail || '',
     householdId,
+    status: 'approved',
     joinedAt: new Date().toISOString()
   };
   writeUserMappings(mappings);
 
-  return getHouseholdInfo(householdId);
+  return getHouseholdInfo(householdId, ownerUid);
 }
 
 function joinHouseholdByCode(userUid, userEmail, inputCode) {
@@ -359,8 +377,15 @@ function joinHouseholdByCode(userUid, userEmail, inputCode) {
     throw new Error('קוד הצטרפות לא תקין. בדוק את הקוד ונסה שוב.');
   }
 
-  if (!targetHousehold.members.includes(userUid)) {
-    targetHousehold.members.push(userUid);
+  if (targetHousehold.members && targetHousehold.members.includes(userUid)) {
+    return getHouseholdInfo(targetHousehold.householdId, userUid);
+  }
+
+  if (!targetHousehold.pendingMembers) {
+    targetHousehold.pendingMembers = [];
+  }
+  if (!targetHousehold.pendingMembers.includes(userUid)) {
+    targetHousehold.pendingMembers.push(userUid);
   }
   targetHousehold.isConfigured = true;
   writeHouseholdsRegistry(registry);
@@ -369,11 +394,79 @@ function joinHouseholdByCode(userUid, userEmail, inputCode) {
     uid: userUid,
     email: userEmail || '',
     householdId: targetHousehold.householdId,
+    status: 'pending_approval',
     joinedAt: new Date().toISOString()
   };
   writeUserMappings(mappings);
 
-  return getHouseholdInfo(targetHousehold.householdId);
+  return getHouseholdInfo(targetHousehold.householdId, userUid);
+}
+
+function approveMemberRequest(managerUid, targetUid) {
+  if (!managerUid || !targetUid) throw new Error('פרטים חסרים');
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+
+  const managerHouseholdId = mappings[managerUid] ? mappings[managerUid].householdId : null;
+  if (!managerHouseholdId || !registry[managerHouseholdId]) {
+    throw new Error('משפחה לא נמצאה');
+  }
+
+  const h = registry[managerHouseholdId];
+  if (h.ownerUid !== managerUid && !(h.members || []).includes(managerUid)) {
+    throw new Error('רק חברי משפחה פעילים יכולים לאשר מצטרפים חדשים');
+  }
+
+  h.pendingMembers = (h.pendingMembers || []).filter(m => m !== targetUid);
+  if (!h.members) h.members = [];
+  if (!h.members.includes(targetUid)) {
+    h.members.push(targetUid);
+  }
+  writeHouseholdsRegistry(registry);
+
+  if (mappings[targetUid]) {
+    mappings[targetUid].householdId = managerHouseholdId;
+    mappings[targetUid].status = 'approved';
+    writeUserMappings(mappings);
+  }
+
+  return getHouseholdInfo(managerHouseholdId, managerUid);
+}
+
+function rejectMemberRequest(managerUid, targetUid) {
+  if (!managerUid || !targetUid) throw new Error('פרטים חסרים');
+  const registry = readHouseholdsRegistry();
+  const mappings = readUserMappings();
+
+  const managerHouseholdId = mappings[managerUid] ? mappings[managerUid].householdId : null;
+  if (!managerHouseholdId || !registry[managerHouseholdId]) {
+    throw new Error('משפחה לא נמצאה');
+  }
+
+  const h = registry[managerHouseholdId];
+  if (h.ownerUid !== managerUid && !(h.members || []).includes(managerUid)) {
+    throw new Error('רק חברי משפחה פעילים יכולים לדחות בקשות הצטרפות');
+  }
+
+  h.pendingMembers = (h.pendingMembers || []).filter(m => m !== targetUid);
+  h.members = (h.members || []).filter(m => m !== targetUid);
+  writeHouseholdsRegistry(registry);
+
+  const targetEmail = mappings[targetUid] ? mappings[targetUid].email : '';
+  delete mappings[targetUid];
+  writeUserMappings(mappings);
+
+  getHouseholdIdForUser(targetUid, targetEmail);
+
+  return getHouseholdInfo(managerHouseholdId, managerUid);
+}
+
+function isUserPending(userUid, householdId) {
+  if (!userUid || !householdId) return false;
+  const registry = readHouseholdsRegistry();
+  const h = registry[householdId];
+  if (!h || !Array.isArray(h.pendingMembers)) return false;
+  return h.pendingMembers.includes(userUid);
 }
 
 function leaveHousehold(userUid, userEmail) {
@@ -384,11 +477,16 @@ function leaveHousehold(userUid, userEmail) {
   if (currentHouseholdId) {
     const registry = readHouseholdsRegistry();
     const h = registry[currentHouseholdId];
-    if (h && Array.isArray(h.members)) {
-      h.members = h.members.filter(m => m !== userUid);
-      if (h.members.length === 0) {
+    if (h) {
+      if (Array.isArray(h.members)) {
+        h.members = h.members.filter(m => m !== userUid);
+      }
+      if (Array.isArray(h.pendingMembers)) {
+        h.pendingMembers = h.pendingMembers.filter(m => m !== userUid);
+      }
+      if ((!h.members || h.members.length === 0) && (!h.pendingMembers || h.pendingMembers.length === 0)) {
         delete registry[currentHouseholdId];
-      } else if (h.ownerUid === userUid) {
+      } else if (h.ownerUid === userUid && h.members && h.members.length > 0) {
         h.ownerUid = h.members[0];
       }
       writeHouseholdsRegistry(registry);
@@ -398,9 +496,8 @@ function leaveHousehold(userUid, userEmail) {
   delete mappings[userUid];
   writeUserMappings(mappings);
 
-  // Return new standalone household info
   const newHouseholdId = getHouseholdIdForUser(userUid, userEmail);
-  return getHouseholdInfo(newHouseholdId);
+  return getHouseholdInfo(newHouseholdId, userUid);
 }
 
 function removeMemberFromHousehold(ownerUid, targetUid) {
@@ -422,6 +519,7 @@ function removeMemberFromHousehold(ownerUid, targetUid) {
   }
 
   h.members = (h.members || []).filter(m => m !== targetUid);
+  h.pendingMembers = (h.pendingMembers || []).filter(m => m !== targetUid);
   writeHouseholdsRegistry(registry);
 
   if (mappings[targetUid] && mappings[targetUid].householdId === ownerHouseholdId) {
@@ -430,7 +528,7 @@ function removeMemberFromHousehold(ownerUid, targetUid) {
     getHouseholdIdForUser(targetUid, mappings[targetUid] ? mappings[targetUid].email : '');
   }
 
-  return getHouseholdInfo(ownerHouseholdId);
+  return getHouseholdInfo(ownerHouseholdId, ownerUid);
 }
 
 function renameHousehold(userUid, newName) {
@@ -486,6 +584,9 @@ module.exports = {
   getHouseholdInfo,
   createHousehold,
   joinHouseholdByCode,
+  approveMemberRequest,
+  rejectMemberRequest,
+  isUserPending,
   leaveHousehold,
   removeMemberFromHousehold,
   renameHousehold,

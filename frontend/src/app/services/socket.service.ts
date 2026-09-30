@@ -2,6 +2,7 @@ import { Injectable, OnDestroy, Injector } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
 import { AppData, TaskDelta } from '../models/task.model';
+import { HouseholdInfo } from './household.service';
 import { FirebaseAuthService } from '../core/services/firebase-auth.service';
 
 @Injectable({ providedIn: 'root' })
@@ -9,6 +10,7 @@ export class SocketService implements OnDestroy {
   private socket: Socket;
   private taskUpdated$ = new Subject<AppData>();
   private taskDelta$ = new Subject<TaskDelta>();
+  private householdUpdated$ = new Subject<HouseholdInfo>();
 
   constructor(private injector: Injector) {
     this.socket = io({ transports: ['websocket', 'polling'] });
@@ -28,6 +30,10 @@ export class SocketService implements OnDestroy {
 
     this.socket.on('task_delta', (delta: TaskDelta) => {
       this.taskDelta$.next(delta);
+    });
+
+    this.socket.on('household_updated', (info: HouseholdInfo) => {
+      this.householdUpdated$.next(info);
     });
 
     this.socket.onAny((event: string, data: any) => {
@@ -60,6 +66,10 @@ export class SocketService implements OnDestroy {
 
   get onTaskDelta(): Observable<TaskDelta> {
     return this.taskDelta$.asObservable();
+  }
+
+  get onHouseholdUpdated(): Observable<HouseholdInfo> {
+    return this.householdUpdated$.asObservable();
   }
 
   get connected(): boolean {

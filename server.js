@@ -23,6 +23,8 @@ const {
   getHouseholdInfo,
   createHousehold,
   joinHouseholdByCode,
+  approveMemberRequest,
+  rejectMemberRequest,
   leaveHousehold,
   removeMemberFromHousehold,
   renameHousehold,
@@ -30,7 +32,7 @@ const {
 } = require('./db_manager');
 
 const { getAuth } = require('firebase-admin/auth');
-const { verifyAuth, requireParentAuth } = require('./auth_middleware');
+const { verifyAuth, requireParentAuth, requireApprovedParent } = require('./auth_middleware');
 
 // WebSocket client support across all Node.js versions (including Node 20 LTS on Proxmox/Debian)
 const WebSocket = (() => {
@@ -1421,7 +1423,8 @@ app.post('/api/devices/revoke', verifyAuth, requireParentAuth, (req, res) => {
 // ---- Family / Household Management Endpoints ----
 app.get('/api/household/my-household', verifyAuth, requireParentAuth, (req, res) => {
   try {
-    const info = getHouseholdInfo(req.householdId);
+    const uid = req.user ? req.user.uid : null;
+    const info = getHouseholdInfo(req.householdId, uid);
     if (!info) {
       return res.status(404).json({ success: false, error: 'משפחה לא נמצאה' });
     }
@@ -1454,6 +1457,34 @@ app.post('/api/household/join', verifyAuth, requireParentAuth, (req, res) => {
     if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
 
     const info = joinHouseholdByCode(uid, email, joinCode);
+    io.to(info.householdId).emit('household_updated', info);
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/household/approve-member', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const { targetUid } = req.body || {};
+    const uid = req.user ? req.user.uid : null;
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const info = approveMemberRequest(uid, targetUid);
+    io.to(info.householdId).emit('household_updated', info);
+    res.json({ success: true, household: info });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/household/reject-member', verifyAuth, requireParentAuth, (req, res) => {
+  try {
+    const { targetUid } = req.body || {};
+    const uid = req.user ? req.user.uid : null;
+    if (!uid) return res.status(401).json({ success: false, error: 'לא מחובר' });
+
+    const info = rejectMemberRequest(uid, targetUid);
     io.to(info.householdId).emit('household_updated', info);
     res.json({ success: true, household: info });
   } catch (err) {
@@ -2162,7 +2193,7 @@ app.get('/api/history', verifyAuth, (req, res) => {
 });
 
 // API Endpoints: Children Management (CRUD)
-app.post('/api/children', verifyAuth, requireParentAuth, (req, res) => {
+app.post('/api/children', verifyAuth, requireApprovedParent, (req, res) => {
   const { name } = req.body;
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Child name is required' });
@@ -2189,7 +2220,7 @@ app.post('/api/children', verifyAuth, requireParentAuth, (req, res) => {
   }
 });
 
-app.put('/api/children/:id', verifyAuth, requireParentAuth, (req, res) => {
+app.put('/api/children/:id', verifyAuth, requireApprovedParent, (req, res) => {
   const { id } = req.params;
   const { name } = req.body;
 
@@ -2217,7 +2248,7 @@ app.put('/api/children/:id', verifyAuth, requireParentAuth, (req, res) => {
   }
 });
 
-app.delete('/api/children/:id', verifyAuth, requireParentAuth, (req, res) => {
+app.delete('/api/children/:id', verifyAuth, requireApprovedParent, (req, res) => {
   const { id } = req.params;
 
   try {
@@ -2241,7 +2272,7 @@ app.delete('/api/children/:id', verifyAuth, requireParentAuth, (req, res) => {
 });
 
 // API Endpoints: Task Management (CRUD per child)
-app.post('/api/children/:id/tasks', verifyAuth, requireParentAuth, (req, res) => {
+app.post('/api/children/:id/tasks', verifyAuth, requireApprovedParent, (req, res) => {
   const { id } = req.params;
   const { title, icon } = req.body;
 
@@ -2282,7 +2313,7 @@ app.post('/api/children/:id/tasks', verifyAuth, requireParentAuth, (req, res) =>
   }
 });
 
-app.put('/api/children/:id/tasks/:taskId', verifyAuth, requireParentAuth, (req, res) => {
+app.put('/api/children/:id/tasks/:taskId', verifyAuth, requireApprovedParent, (req, res) => {
   const { id, taskId } = req.params;
   const { title, icon } = req.body;
 
@@ -2331,7 +2362,7 @@ app.put('/api/children/:id/tasks/:taskId', verifyAuth, requireParentAuth, (req, 
   }
 });
 
-app.delete('/api/children/:id/tasks/:taskId', verifyAuth, requireParentAuth, (req, res) => {
+app.delete('/api/children/:id/tasks/:taskId', verifyAuth, requireApprovedParent, (req, res) => {
   const { id, taskId } = req.params;
 
   try {
@@ -2360,7 +2391,7 @@ app.delete('/api/children/:id/tasks/:taskId', verifyAuth, requireParentAuth, (re
 });
 
 // Reorder tasks for a child
-app.post('/api/children/:id/tasks/reorder', verifyAuth, requireParentAuth, (req, res) => {
+app.post('/api/children/:id/tasks/reorder', verifyAuth, requireApprovedParent, (req, res) => {
   const { id } = req.params;
   const { taskIds } = req.body;
 

@@ -6,7 +6,7 @@ export interface FamilyMember {
   uid: string;
   email: string;
   name: string;
-  role?: 'owner' | 'member';
+  role?: 'owner' | 'member' | 'pending';
   joinedAt?: string;
 }
 
@@ -17,7 +17,10 @@ export interface HouseholdInfo {
   ownerUid: string;
   createdAt?: string;
   members: string[];
+  pendingMembers?: string[];
   memberProfiles: FamilyMember[];
+  pendingMemberProfiles?: FamilyMember[];
+  isPending?: boolean;
   isConfigured?: boolean;
 }
 
@@ -51,6 +54,28 @@ export class HouseholdService {
 
   joinHousehold(joinCode: string): Observable<{ success: boolean; household: HouseholdInfo }> {
     return this.http.post<{ success: boolean; household: HouseholdInfo }>('/api/household/join', { joinCode }).pipe(
+      tap(res => {
+        if (res && res.household) {
+          this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
+        }
+      })
+    );
+  }
+
+  approveMember(targetUid: string): Observable<{ success: boolean; household: HouseholdInfo }> {
+    return this.http.post<{ success: boolean; household: HouseholdInfo }>('/api/household/approve-member', { targetUid }).pipe(
+      tap(res => {
+        if (res && res.household) {
+          this.currentHousehold.set(res.household);
+          if (res.household.householdId) localStorage.setItem('kids_tasker_household_id', res.household.householdId);
+        }
+      })
+    );
+  }
+
+  rejectMember(targetUid: string): Observable<{ success: boolean; household: HouseholdInfo }> {
+    return this.http.post<{ success: boolean; household: HouseholdInfo }>('/api/household/reject-member', { targetUid }).pipe(
       tap(res => {
         if (res && res.household) {
           this.currentHousehold.set(res.household);

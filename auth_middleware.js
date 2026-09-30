@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
-const { getDeviceByToken, getHouseholdIdForUser } = require('./db_manager');
+const { getDeviceByToken, getHouseholdIdForUser, isUserPending } = require('./db_manager');
 
 // Initialize Firebase Admin SDK
 let firebaseInitialized = false;
@@ -157,7 +157,21 @@ function requireParentAuth(req, res, next) {
   next();
 }
 
+function requireApprovedParent(req, res, next) {
+  if (!req.isParent) {
+    return res.status(403).json({ error: 'פעולה זו מורשת להורים בלבד.' });
+  }
+  if (req.user && req.user.uid && req.householdId && isUserPending(req.user.uid, req.householdId)) {
+    return res.status(403).json({
+      error: 'בקשת ההצטרפות שלך למשפחה ממתינה לאישור מנהל המשפחה.',
+      code: 'PENDING_APPROVAL'
+    });
+  }
+  next();
+}
+
 module.exports = {
   verifyAuth,
-  requireParentAuth
+  requireParentAuth,
+  requireApprovedParent
 };

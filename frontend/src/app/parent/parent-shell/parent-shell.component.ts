@@ -11,6 +11,7 @@ import { PinModalComponent } from '../../shared/pin-modal/pin-modal.component';
 import { ConfirmModalComponent } from '../../shared/confirm-modal/confirm-modal.component';
 
 import { FirebaseAuthService } from '../../core/services/firebase-auth.service';
+import { HouseholdService } from '../../services/household.service';
 
 @Component({
   selector: 'app-parent-shell',
@@ -31,6 +32,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
 
   private socketSub?: Subscription;
   private socketDeltaSub?: Subscription;
+  private householdSocketSub?: Subscription;
   private routerSub?: Subscription;
   private toastTimer: any;
 
@@ -40,6 +42,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
     private taskService: TaskService,
     public pwa: PwaService,
     public authService: FirebaseAuthService,
+    public householdService: HouseholdService
   ) {
     this.routerSub = this.router.events.pipe(
       filter(e => e instanceof NavigationEnd)
@@ -52,6 +55,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.checkAccess();
+    this.householdService.getMyHousehold().subscribe();
 
     this.socketSub = this.socketService.onTaskUpdated.subscribe((data) => {
       // Data update is handled by the services, but we ensure connection state is updated
@@ -64,6 +68,10 @@ export class ParentShellComponent implements OnInit, OnDestroy {
       this.taskService.applyTaskDelta(delta);
     });
 
+    this.householdSocketSub = this.socketService.onHouseholdUpdated.subscribe((info) => {
+      this.householdService.currentHousehold.set(info);
+    });
+
     setInterval(() => {
       this.isConnected.set(this.socketService.connected);
     }, 1000);
@@ -72,7 +80,17 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.socketSub?.unsubscribe();
     this.socketDeltaSub?.unsubscribe();
+    this.householdSocketSub?.unsubscribe();
     this.routerSub?.unsubscribe();
+  }
+
+  refreshPendingHousehold() {
+    this.householdService.getMyHousehold().subscribe();
+  }
+
+  cancelPendingHouseholdRequest() {
+    if (!confirm('האם אתה בטוח שברצונך לבטל את בקשת ההצטרפות?')) return;
+    this.householdService.leaveHousehold().subscribe();
   }
 
   checkAccess() {

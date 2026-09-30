@@ -79,6 +79,44 @@ export interface AllowedDevice {
           </div>
         </div>
 
+        <!-- Pending Members Approval Section (for Managers) -->
+        @if (isOwner() && household()?.pendingMemberProfiles?.length) {
+          <div class="bg-amber-950/30 border border-amber-500/40 rounded-2xl p-4 space-y-3 shadow-md">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span>⏳</span>
+                <span>בקשות הצטרפות שממתינות לאישורך ({{ household()?.pendingMemberProfiles?.length }})</span>
+              </h3>
+            </div>
+
+            <div class="space-y-2">
+              @for (p of household()?.pendingMemberProfiles; track p.uid) {
+                <div class="bg-slate-900 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-sm flex-shrink-0">
+                      {{ (p.name || p.email).charAt(0).toUpperCase() }}
+                    </div>
+                    <div class="min-w-0">
+                      <div class="text-xs font-bold text-white truncate dir-ltr text-right">{{ p.name || p.email }}</div>
+                      <div class="text-[10px] text-amber-400/80">ממתין לאישור מנהל</div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <button (click)="approveMember(p)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition shadow flex items-center gap-1">
+                      <span>✓</span>
+                      <span>אשר</span>
+                    </button>
+                    <button (click)="rejectMember(p)" class="px-2.5 py-1.5 bg-rose-950 hover:bg-rose-900 border border-rose-800 text-rose-300 font-bold text-xs rounded-lg transition flex items-center gap-1">
+                      <span>✕</span>
+                      <span>דחה</span>
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         <!-- Members Profiles List -->
         <div class="pt-4 border-t border-slate-800/80 space-y-3">
           <div class="flex items-center justify-between">
@@ -393,6 +431,27 @@ export class DevicesTabComponent implements OnInit {
           this.household.set(res.household);
         }
         this.isEditingName.set(false);
+      }
+    });
+  }
+
+  public approveMember(m: FamilyMember) {
+    this.householdService.approveMember(m.uid).subscribe({
+      next: (res) => {
+        if (res && res.household) {
+          this.household.set(res.household);
+        }
+      }
+    });
+  }
+
+  public rejectMember(m: FamilyMember) {
+    if (!confirm(`האם לדחות את בקשת ההצטרפות של ${m.name || m.email}?`)) return;
+    this.householdService.rejectMember(m.uid).subscribe({
+      next: (res) => {
+        if (res && res.household) {
+          this.household.set(res.household);
+        }
       }
     });
   }

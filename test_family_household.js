@@ -2,6 +2,8 @@ const assert = require('assert');
 const {
   createHousehold,
   joinHouseholdByCode,
+  approveMemberRequest,
+  rejectMemberRequest,
   getHouseholdInfo,
   getHouseholdIdForUser
 } = require('./db_manager');
@@ -27,16 +29,23 @@ assert.strictEqual(resolvedId1, household1.householdId, 'Owner should map to cre
 
 console.log(`✓ Test 2: getHouseholdIdForUser resolved owner to ${resolvedId1}`);
 
-// Test 3: Join Household via Join Code
+// Test 3: Join Household via Join Code -> Pending Approval
 const memberUid = 'parent_uid_2';
 const memberEmail = 'parent2@test.com';
 
 const joinedHousehold = joinHouseholdByCode(memberUid, memberEmail, household1.joinCode);
 assert.strictEqual(joinedHousehold.householdId, household1.householdId, 'Joined householdId must match');
-assert(joinedHousehold.members.includes(memberUid), 'Second parent should be in members list');
-assert.strictEqual(joinedHousehold.members.length, 2, 'Household should have 2 members');
+assert(joinedHousehold.pendingMembers.includes(memberUid), 'Second parent should be in pendingMembers list');
+assert.strictEqual(joinedHousehold.isPending, true, 'Joined member should be in pending state before approval');
 
-console.log(`✓ Test 3: joinHouseholdByCode successfully added second parent (${memberEmail}) to family`);
+console.log(`✓ Test 3: joinHouseholdByCode placed second parent (${memberEmail}) into pending approval status`);
+
+// Test 3b: Approve Member Request
+const approvedHousehold = approveMemberRequest(ownerUid, memberUid);
+assert(approvedHousehold.members.includes(memberUid), 'Second parent should be in members list after approval');
+assert.strictEqual(approvedHousehold.members.length, 2, 'Household should have 2 approved members');
+
+console.log(`✓ Test 3b: approveMemberRequest successfully approved second parent (${memberEmail}) into family`);
 
 // Test 4: Household ID Resolution for joined member
 const resolvedId2 = getHouseholdIdForUser(memberUid, memberEmail);

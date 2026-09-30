@@ -136,3 +136,31 @@
     (onCancel)="showResetConfirm.set(false)">
   </app-confirm-modal>
 }
+
+@if (householdService.currentHousehold()?.isPending) {
+  <div class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-50 flex items-center justify-center p-6 text-center">
+    <div class="max-w-md w-full bg-slate-900 border border-amber-500/40 rounded-3xl p-8 shadow-2xl space-y-6">
+      <div class="w-20 h-20 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto text-4xl animate-pulse">
+        ⏳
+      </div>
+      <div>
+        <h2 class="text-2xl font-black text-white">ממתין לאישור מנהל המשפחה</h2>
+        <p class="text-sm text-slate-300 mt-2 leading-relaxed">
+          הצטרפת בהצלחה למשפחת <span class="font-bold text-amber-400">{{ householdService.currentHousehold()?.name || 'המשפחה' }}</span>!
+        </p>
+        <p class="text-xs text-slate-400 mt-3 leading-relaxed">
+          מנהל המשפחה צריך לאשר את בקשת ההצטרפות שלך לפני שתוכל לצפות ולנהל את משימות המשפחה.
+        </p>
+      </div>
+      <div class="pt-2 flex flex-col gap-3">
+        <button (click)="refreshPendingHousehold()" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition shadow-lg flex items-center justify-center gap-2 text-sm">
+          <span>🔄</span>
+          <span>בדוק סטטוס אישור</span>
+        </button>
+        <button (click)="cancelPendingHouseholdRequest()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition text-sm">
+          ביטול בקשת הצטרפות
+        </button>
+      </div>
+    </div>
+  </div>
+}

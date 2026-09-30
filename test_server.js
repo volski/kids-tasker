@@ -558,11 +558,15 @@ async function runTests() {
     }
     console.log('✓ Verified createHousehold creates household with joinCode & owner');
 
-    const h2 = dbManager.joinHouseholdByCode('user_member_2', 'parent2@test.com', h1.joinCode);
-    if (!h2 || h2.members.length !== 2 || !h2.members.includes('user_member_2')) {
-      throw new Error('joinHouseholdByCode failed');
+    const h2Pending = dbManager.joinHouseholdByCode('user_member_2', 'parent2@test.com', h1.joinCode);
+    if (!h2Pending || !h2Pending.pendingMembers.includes('user_member_2') || !h2Pending.isPending) {
+      throw new Error('joinHouseholdByCode pending state failed');
     }
-    console.log('✓ Verified joinHouseholdByCode connects second parent to same family');
+    const h2 = dbManager.approveMemberRequest('user_owner_1', 'user_member_2');
+    if (!h2 || h2.members.length !== 2 || !h2.members.includes('user_member_2')) {
+      throw new Error('approveMemberRequest failed');
+    }
+    console.log('✓ Verified joinHouseholdByCode requires manager approval before granting full family access');
 
     const hRenamed = dbManager.renameHousehold('user_owner_1', 'משפחת כהן המורחבת');
     if (!hRenamed || hRenamed.name !== 'משפחת כהן המורחבת') {
