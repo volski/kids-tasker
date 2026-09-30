@@ -55,7 +55,7 @@
           </div>
 
           <div>
-            <button (click)="handleDeleteChild(child)" class="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 rounded-xl text-xs font-bold transition">
+            <button (click)="promptDeleteChild(child)" class="px-3.5 py-2 bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-rose-300 rounded-xl text-xs font-bold transition">
               מחק ילד/ה 🗑️
             </button>
           </div>
@@ -218,7 +218,7 @@
                     @if (savingTasks.has(task.id)) {
                       <span class="text-xs font-bold text-emerald-400">✓</span>
                     }
-                    <button (click)="handleDeleteTask(child.id, task)" class="p-1.5 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-bold transition active:scale-95" title="מחק משימה">
+                    <button (click)="promptDeleteTask(child.id, task)" class="p-1.5 hover:bg-rose-950 text-rose-400 rounded-xl text-xs font-bold transition active:scale-95" title="מחק משימה">
                       🗑️
                     </button>
                   </div>
@@ -231,3 +231,23 @@
     }
   </div>
 </div>
+
+@if (showDeleteChildModal()) {
+  <app-confirm-modal
+    [title]="'מחיקת משתמש'"
+    [message]="'האם אתה בטוח שברצונך למחוק את ' + showDeleteChildModal()?.name + '? (כל המשימות יימחקו)'"
+    confirmText="מחק משתמש"
+    (onConfirm)="handleDeleteChild(showDeleteChildModal()!)"
+    (onCancel)="showDeleteChildModal.set(null)">
+  </app-confirm-modal>
+}
+
+@if (showDeleteTaskModal()) {
+  <app-confirm-modal
+    [title]="'מחיקת משימה'"
+    [message]="'האם אתה בטוח שברצונך למחוק את המשימה \'' + showDeleteTaskModal()?.task?.title + '\'? (הפעולה לא הפיכה)'"
+    confirmText="מחק משימה"
+    (onConfirm)="handleDeleteTask(showDeleteTaskModal()!.childId, showDeleteTaskModal()!.task)"
+    (onCancel)="showDeleteTaskModal.set(null)">
+  </app-confirm-modal>
+}

@@ -1,5 +1,6 @@
 import { Component, OnInit, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ConfirmModalComponent } from '../../shared/confirm-modal/confirm-modal.component';
 import { FormsModule } from '@angular/forms';
 import { TaskService } from '../../services/task.service';
 import { ParentShellComponent } from '../parent-shell/parent-shell.component';
@@ -8,7 +9,7 @@ import { Child, Task, Icon } from '../../models/task.model';
 @Component({
   selector: 'app-manage-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ConfirmModalComponent],
   templateUrl: './manage-tab.component.html',
   styleUrl: './manage-tab.component.css'
 })
@@ -84,10 +85,18 @@ export class ManageTabComponent implements OnInit {
     }
   }
 
-  async handleDeleteChild(child: Child) {
-    if (!confirm(`האם למחוק את ${child.name} ואת כל המשימות המשויכות?\\nהפעולה תישמר ישירות לקובץ tasks.json.`)) return;
+  
+  showDeleteChildModal = signal<Child | null>(null);
+  showDeleteTaskModal = signal<{childId: string, task: Task} | null>(null);
 
+  promptDeleteChild(child: Child) {
+    this.showDeleteChildModal.set(child);
+  }
+
+  async handleDeleteChild(child: Child) {
+    this.showDeleteChildModal.set(null);
     try {
+
       const res = await fetch(`/api/children/${child.id}`, {
         method: 'DELETE'
       });
@@ -151,10 +160,15 @@ export class ManageTabComponent implements OnInit {
     }
   }
 
-  async handleDeleteTask(childId: string, task: Task) {
-    if (!confirm(`האם למחוק את המשימה "${task.title}"?\\nהפעולה תישמר לקובץ.`)) return;
+  
+  promptDeleteTask(childId: string, task: Task) {
+    this.showDeleteTaskModal.set({ childId, task });
+  }
 
+  async handleDeleteTask(childId: string, task: Task) {
+    this.showDeleteTaskModal.set(null);
     try {
+
       const res = await fetch(`/api/children/${childId}/tasks/${task.id}`, {
         method: 'DELETE'
       });
