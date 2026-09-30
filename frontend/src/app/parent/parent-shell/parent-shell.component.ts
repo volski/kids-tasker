@@ -6,11 +6,12 @@ import { Subscription } from 'rxjs';
 import { SocketService } from '../../services/socket.service';
 import { TaskService } from '../../services/task.service';
 import { PinModalComponent } from '../../shared/pin-modal/pin-modal.component';
+import { ConfirmModalComponent } from '../../shared/confirm-modal/confirm-modal.component';
 
 @Component({
   selector: 'app-parent-shell',
   standalone: true,
-  imports: [CommonModule, RouterModule, PinModalComponent],
+  imports: [CommonModule, RouterModule, PinModalComponent, ConfirmModalComponent],
   templateUrl: './parent-shell.component.html',
   styleUrl: './parent-shell.component.css'
 })
@@ -18,6 +19,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
   activeTab = signal('status');
   isConnected = signal(false);
   showPinModal = signal(false);
+  showResetConfirm = signal(false);
   isUnlocked = signal(false);
   toastMessage = signal<string | null>(null);
   toastType = signal<'success' | 'error'>('success');
@@ -93,9 +95,12 @@ export class ParentShellComponent implements OnInit, OnDestroy {
     }
   }
 
-  async confirmResetDay() {
-    if (!confirm('האם לאפס את סימוני כל המשימות ליום חדש?\\n(שימו לב: שמות הילדים, המשימות וההיסטוריה נשמרים כרגיל!)')) return;
-    
+  promptResetDay() {
+    this.showResetConfirm.set(true);
+  }
+
+  async executeResetDay() {
+    this.showResetConfirm.set(false);
     try {
       await fetch('/api/tasks/reset-day', { method: 'POST' });
       this.showToast('משימות היום אופסו ליום חדש! כל השמות וההיסטוריה נשמרו ✓', 'success');

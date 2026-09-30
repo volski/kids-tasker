@@ -16,7 +16,7 @@
       </div>
 
       <div class="flex items-center gap-2 sm:gap-3">
-        <button (click)="confirmResetDay()" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/50 shadow-sm transition flex items-center gap-1.5" title="איפוס משימות להיום בלבד - שומר את כל שמות הילדים וההיסטוריה!">
+        <button (click)="promptResetDay()" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/50 shadow-sm transition flex items-center gap-1.5" title="איפוס משימות להיום בלבד - שומר את כל שמות הילדים וההיסטוריה!">
           <span>🔄</span>
           <span>איפוס ליום חדש</span>
         </button>
@@ -87,4 +87,14 @@
 
 @if (showPinModal()) {
   <app-pin-modal (verified)="onPinVerified()" (closed)="onPinClosed()"></app-pin-modal>
+}
+
+@if (showResetConfirm()) {
+  <app-confirm-modal
+    title="איפוס יום"
+    message="האם אתה בטוח שברצונך לאפס את כל המשימות? (הפעולה לא הפיכה)"
+    confirmText="אפס עכשיו"
+    (onConfirm)="executeResetDay()"
+    (onCancel)="showResetConfirm.set(false)">
+  </app-confirm-modal>
 }
