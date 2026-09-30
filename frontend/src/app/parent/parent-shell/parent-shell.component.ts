@@ -9,6 +9,8 @@ import { PwaService } from '../../services/pwa.service';
 import { PinModalComponent } from '../../shared/pin-modal/pin-modal.component';
 import { ConfirmModalComponent } from '../../shared/confirm-modal/confirm-modal.component';
 
+import { FirebaseAuthService } from '../../core/services/firebase-auth.service';
+
 @Component({
   selector: 'app-parent-shell',
   standalone: true,
@@ -36,6 +38,7 @@ export class ParentShellComponent implements OnInit, OnDestroy {
     private socketService: SocketService,
     private taskService: TaskService,
     public pwa: PwaService,
+    public authService: FirebaseAuthService,
   ) {
     this.routerSub = this.router.events.pipe(
       filter(e => e instanceof NavigationEnd)
