@@ -18,12 +18,12 @@
       <div class="flex items-center gap-2 sm:gap-3">
         <button (click)="promptResetDay()" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-600/80 hover:bg-amber-600 text-white border border-amber-500/50 shadow-sm transition flex items-center gap-1.5" title="איפוס משימות להיום בלבד - שומר את כל שמות הילדים וההיסטוריה!">
           <span>🔄</span>
-          <span>איפוס ליום חדש</span>
+          <span class="hidden sm:inline">איפוס ליום חדש</span>
         </button>
 
         <a routerLink="/" class="px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/50 shadow-sm transition flex items-center gap-1.5">
           <span>📱</span>
-          <span>לוח ילדים (טאבלט)</span>
+          <span class="hidden sm:inline">לוח ילדים</span>
         </a>
 
         <!-- Install App (Android/Chrome/Edge: native prompt) -->
@@ -70,23 +70,23 @@
     <div class="max-w-7xl mx-auto flex gap-2 sm:gap-4 overflow-x-auto py-2">
       <a routerLink="status" [class]="getTabClass('status')">
         <span>📊</span>
-        <span>סטטוס משימות היום</span>
+        <span class="hidden sm:inline">סטטוס משימות היום</span>
       </a>
       <a routerLink="manage" [class]="getTabClass('manage')">
         <span>✏️</span>
-        <span>ניהול ילדים ומשימות</span>
+        <span class="hidden sm:inline">ניהול ילדים ומשימות</span>
       </a>
       <a routerLink="history" [class]="getTabClass('history')">
         <span>📅</span>
-        <span>היסטוריית משימות</span>
+        <span class="hidden sm:inline">היסטוריית משימות</span>
       </a>
       <a routerLink="hass" [class]="getTabClass('hass')">
         <span>🏠</span>
-        <span>בית חכם (Home Assistant)</span>
+        <span class="hidden sm:inline">בית חכם</span>
       </a>
       <a routerLink="settings" [class]="getTabClass('settings')">
         <span>⚙️</span>
-        <span>הגדרות</span>
+        <span class="hidden sm:inline">הגדרות</span>
       </a>
     </div>
   </div>
