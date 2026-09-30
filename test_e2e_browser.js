@@ -9,12 +9,17 @@ async function runBrowserTests() {
 
   try {
     // -------------------------------------------------------------
-    // Test 1: Kids Board View (/)
+    // Test 1: Kids Board View (/) for Paired Display Screen
     // -------------------------------------------------------------
-    console.log('--- Test 1: Testing Kids Board View ---');
+    console.log('--- Test 1: Testing Kids Board View for Paired Display ---');
     const contextKids = await browser.newContext();
     const pageKids = await contextKids.newPage();
     
+    // Simulate paired Kids Display device token
+    await pageKids.addInitScript(() => {
+      localStorage.setItem('kids_tasker_device_token', 'test_token_paired_123');
+    });
+
     await pageKids.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
     
     // Check if title or header is present
@@ -35,6 +40,19 @@ async function runBrowserTests() {
     console.log('✓ Clicked task card on Kids Board');
 
     // -------------------------------------------------------------
+    // Test 1b: Route Guard Redirection for Unpaired Visitors
+    // -------------------------------------------------------------
+    console.log('\n--- Test 1b: Testing Route Guard Blocking Unpaired Visitors ---');
+    const contextUnpaired = await browser.newContext();
+    const pageUnpaired = await contextUnpaired.newPage();
+    await pageUnpaired.goto(`${BASE_URL}/`, { waitUntil: 'networkidle' });
+    await pageUnpaired.waitForTimeout(500);
+
+    const currentUrl = pageUnpaired.url();
+    assert(currentUrl.includes('/pairing'), `Unpaired visitor should be redirected to /pairing, got ${currentUrl}`);
+    console.log('✓ Unpaired visitor correctly blocked and redirected to /pairing screen');
+
+    // -------------------------------------------------------------
     // Test 2: Parent Dashboard & PIN Unlock (/#/parent)
     // -------------------------------------------------------------
     console.log('\n--- Test 2: Testing Parent Dashboard & PIN Unlock ---');
@@ -42,6 +60,7 @@ async function runBrowserTests() {
     const pageParent = await contextParent.newPage();
     await pageParent.addInitScript(() => {
       sessionStorage.setItem('kids_tasker_parent_unlocked', '1');
+      localStorage.setItem('kids_tasker_device_token', 'test_token_parent_123');
     });
 
     await pageParent.goto(`${BASE_URL}/#/parent`, { waitUntil: 'domcontentloaded' });

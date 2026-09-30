@@ -1,8 +1,9 @@
 import { Routes } from '@angular/router';
 import { KidsBoardComponent } from './kids-board/kids-board.component';
+import { authOrDeviceGuard } from './core/guards/auth-or-device.guard';
 
 export const routes: Routes = [
-  { path: '', component: KidsBoardComponent },
+  { path: '', component: KidsBoardComponent, canActivate: [authOrDeviceGuard] },
   { 
     path: 'login', 
     loadComponent: () => import('./auth/login/login.component').then(m => m.LoginComponent) 
@@ -17,6 +18,7 @@ export const routes: Routes = [
   },
   { 
     path: 'parent', 
+    canActivate: [authOrDeviceGuard],
     loadComponent: () => import('./parent/parent-shell/parent-shell.component').then(m => m.ParentShellComponent),
     children: [
       { path: '', redirectTo: 'status', pathMatch: 'full' },
