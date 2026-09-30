@@ -22,22 +22,28 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       const cloned = req.clone({ headers });
       return next(cloned).pipe(
         catchError((error: HttpErrorResponse) => {
-          // Handle 401 Unauthorized / Token Expiration
-          if (error.status === 401 && idToken) {
-            // Attempt to force refresh the token once and retry
-            return from(authService.getIdToken(true)).pipe(
-              switchMap(newToken => {
-                if (newToken && newToken !== idToken) {
-                  const retryReq = req.clone({
-                    headers: req.headers.set('Authorization', `Bearer ${newToken}`)
-                  });
-                  return next(retryReq);
-                }
-                // Token refresh failed or user logged out -> redirect to login
-                router.navigate(['/login']);
-                return throwError(() => error);
-              })
-            );
+          // Handle 401 Unauthorized / Token Expiration / Device Revocation
+          if (error.status === 401) {
+            if (idToken) {
+              // Attempt to force refresh the token once and retry
+              return from(authService.getIdToken(true)).pipe(
+                switchMap(newToken => {
+                  if (newToken && newToken !== idToken) {
+                    const retryReq = req.clone({
+                      headers: req.headers.set('Authorization', `Bearer ${newToken}`)
+                    });
+                    return next(retryReq);
+                  }
+                  // Token refresh failed or user logged out -> redirect to login
+                  router.navigate(['/login']);
+                  return throwError(() => error);
+                })
+              );
+            } else if (deviceToken || error.error?.code === 'DEVICE_REVOKED') {
+              localStorage.removeItem('kids_tasker_device_token');
+              router.navigate(['/pairing']);
+              return throwError(() => error);
+            }
           }
           return throwError(() => error);
         })

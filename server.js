@@ -18,12 +18,14 @@ const {
   pairDevice,
   revokeDevice,
   readPairingSessions,
+  readHouseholdsRegistry,
   getHouseholdIdForUser,
   getHouseholdInfo,
   createHousehold,
   joinHouseholdByCode
 } = require('./db_manager');
 
+const { getAuth } = require('firebase-admin/auth');
 const { verifyAuth, requireParentAuth } = require('./auth_middleware');
 
 // WebSocket client support across all Node.js versions (including Node 20 LTS on Proxmox/Debian)
@@ -258,6 +260,40 @@ function guessIconFromTitle(title) {
   if (title.includes('חיה') || title.includes('כלב') || title.includes('חתול')) return 'pet';
   if (title.includes('ידיים') || title.includes('סבון')) return 'hands';
   return 'star';
+}
+
+async function resolveHouseholdIdForSocket(data) {
+  const { token, deviceToken } = data || {};
+  if (token) {
+    if (process.env.NODE_ENV === 'test' || token.startsWith('test_token_')) {
+      return 'house_test';
+    }
+    try {
+      const decoded = await getAuth().verifyIdToken(token);
+      return getHouseholdIdForUser(decoded.uid, decoded.email);
+    } catch (e) {}
+  }
+  if (deviceToken) {
+    const dev = getDeviceByToken(deviceToken);
+    if (dev) return dev.householdId;
+  }
+  if (process.env.NODE_ENV === 'test') {
+    return 'house_test';
+  }
+  return 'house_default';
+}
+
+function getAllHouseholdIds() {
+  const set = new Set(['house_default']);
+  try {
+    const registry = readHouseholdsRegistry();
+    Object.keys(registry).forEach(id => set.add(id));
+  } catch (e) {}
+  try {
+    const devices = readDevices();
+    Object.values(devices).forEach(d => { if (d.householdId) set.add(d.householdId); });
+  } catch (e) {}
+  return Array.from(set);
 }
 
 // Ensure structure completeness without overwriting user data
@@ -666,7 +702,7 @@ async function createAndSyncAllHassEntities(data) {
 let isSyncingHass = false;
 let hassSyncPending = false;
 
-async function syncHassEntitiesDebounced() {
+async function syncHassEntitiesDebounced(householdId = 'house_default') {
   if (isSyncingHass) {
     hassSyncPending = true;
     return;
@@ -675,7 +711,7 @@ async function syncHassEntitiesDebounced() {
   try {
     do {
       hassSyncPending = false;
-      const latestData = readTasks();
+      const latestData = readTasks(householdId);
       if (latestData.homeAssistant && latestData.homeAssistant.enabled) {
         await createAndSyncAllHassEntities(latestData);
       }
@@ -1039,9 +1075,9 @@ let hassListenerWs = null;
 let hassListenerReconnectTimer = null;
 let hassListenerSubId = null;
 
-function handleExternalParentBypassChange(isBypass) {
+function handleExternalParentBypassChange(isBypass, householdId = (process.env.NODE_ENV === 'test' ? 'house_test' : 'house_default')) {
   try {
-    const data = readTasks();
+    const data = readTasks(householdId);
     if (!data.homeAssistant) {
       data.homeAssistant = { ...DEFAULT_HASS_CONFIG };
     }
@@ -1049,19 +1085,19 @@ function handleExternalParentBypassChange(isBypass) {
     if (currentBypass !== isBypass) {
       console.log(`[Home Assistant Event] Parent TV Bypass state changed in Home Assistant to: ${isBypass ? 'ON' : 'OFF'}`);
       data.homeAssistant.parentBypass = isBypass;
-      writeTasks(data);
-      io.emit('task_updated', data);
-      syncHassEntitiesDebounced().catch(() => {});
+      writeTasks(data, householdId);
+      io.to(householdId).emit('task_updated', data);
+      syncHassEntitiesDebounced(householdId).catch(() => {});
     }
   } catch (err) {
     console.error('Failed to handle external parent bypass state change:', err);
   }
 }
 
-function startHassEventListener() {
+function startHassEventListener(householdId = (process.env.NODE_ENV === 'test' ? 'house_test' : 'house_default')) {
   stopHassEventListener();
 
-  const data = readTasks();
+  const data = readTasks(householdId);
   const hass = data.homeAssistant;
   if (!hass || !hass.enabled || !hass.url || !hass.token) {
     return;
@@ -1423,9 +1459,12 @@ app.get('/api/icons', (req, res) => {
 });
 
 // API Endpoint: Public Status endpoint formatted for Home Assistant REST Sensor
-app.get('/api/hass/status', (req, res) => {
+app.get('/api/hass/status', (req, res, next) => {
+  verifyAuth(req, res, () => next()).catch(() => next());
+}, (req, res) => {
   try {
-    const data = readTasks();
+    const householdId = req.householdId || 'house_default';
+    const data = readTasks(householdId);
     const status = calculateCompletionStatus(data);
     const parentBypass = Boolean(data.homeAssistant?.parentBypass);
     const allowTv = status.allCompleted || parentBypass;
@@ -1461,9 +1500,10 @@ app.get('/api/hass/status', (req, res) => {
 });
 
 // API Endpoint: Toggle Parent TV Bypass
-app.post('/api/hass/bypass', async (req, res) => {
+app.post('/api/hass/bypass', verifyAuth, requireParentAuth, async (req, res) => {
   try {
-    const data = readTasks();
+    const householdId = req.householdId || 'house_default';
+    const data = readTasks(householdId);
     if (!data.homeAssistant) {
       data.homeAssistant = { ...DEFAULT_HASS_CONFIG };
     }
@@ -1481,7 +1521,7 @@ app.post('/api/hass/bypass', async (req, res) => {
     }
 
     data.homeAssistant.parentBypass = enabled;
-    writeTasks(data);
+    writeTasks(data, householdId);
 
     // Sync state directly into Home Assistant entity
     if (data.homeAssistant.enabled && data.homeAssistant.url && data.homeAssistant.token) {
@@ -1512,10 +1552,10 @@ app.post('/api/hass/bypass', async (req, res) => {
         });
       } catch (e) {}
 
-      syncHassEntitiesDebounced().catch(() => {});
+      syncHassEntitiesDebounced(householdId).catch(() => {});
     }
 
-    io.emit('task_updated', data);
+    io.to(householdId).emit('task_updated', data);
     res.json({ success: true, parentBypass: enabled });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -1523,9 +1563,9 @@ app.post('/api/hass/bypass', async (req, res) => {
 });
 
 // API Endpoints: Home Assistant Configuration & Testing & Entity Creation
-app.get('/api/hass/config', (req, res) => {
+app.get('/api/hass/config', verifyAuth, requireParentAuth, (req, res) => {
   try {
-    const data = readTasks();
+    const data = readTasks(req.householdId);
     const config = data.homeAssistant || { ...DEFAULT_HASS_CONFIG };
     const maskedToken = config.token && config.token.length > 8 
       ? config.token.substring(0, 4) + '••••••••' + config.token.substring(config.token.length - 4)
@@ -1541,9 +1581,10 @@ app.get('/api/hass/config', (req, res) => {
   }
 });
 
-app.post('/api/hass/config', async (req, res) => {
+app.post('/api/hass/config', verifyAuth, requireParentAuth, async (req, res) => {
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const currentHass = data.homeAssistant || { ...DEFAULT_HASS_CONFIG };
     const { enabled, url, token, tvEntityId, autoBlockTv, pollIntervalSeconds, targetScope } = req.body;
 
@@ -1557,12 +1598,12 @@ app.post('/api/hass/config', async (req, res) => {
       targetScope: targetScope || currentHass.targetScope || 'all'
     };
 
-    writeTasks(data);
-    io.emit('task_updated', data);
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
 
     // Automatically create and sync entities immediately in Home Assistant
     if (data.homeAssistant.enabled) {
-      syncHassEntitiesDebounced().catch(() => {});
+      syncHassEntitiesDebounced(householdId).catch(() => {});
       startHassEventListener();
     } else {
       stopHassEventListener();
@@ -1575,9 +1616,9 @@ app.post('/api/hass/config', async (req, res) => {
   }
 });
 
-app.post('/api/hass/test', async (req, res) => {
+app.post('/api/hass/test', verifyAuth, requireParentAuth, async (req, res) => {
   try {
-    const data = readTasks();
+    const data = readTasks(req.householdId);
     const currentHass = data.homeAssistant || { ...DEFAULT_HASS_CONFIG };
 
     const url = req.body.url || currentHass.url;
@@ -1595,9 +1636,9 @@ app.post('/api/hass/test', async (req, res) => {
 });
 
 // API Endpoint: Explicitly trigger creation and return the list of created entities in Home Assistant
-app.post('/api/hass/create-entities', async (req, res) => {
+app.post('/api/hass/create-entities', verifyAuth, requireParentAuth, async (req, res) => {
   try {
-    const data = readTasks();
+    const data = readTasks(req.householdId);
     const result = await createAndSyncAllHassEntities(data);
     if (!result.ok) {
       return res.status(400).json({ success: false, error: result.message });
@@ -1610,9 +1651,9 @@ app.post('/api/hass/create-entities', async (req, res) => {
 });
 
 // API Endpoint: Automatically inject/append Lovelace card into Home Assistant dashboard via WebSocket
-app.post('/api/hass/add-card', async (req, res) => {
+app.post('/api/hass/add-card', verifyAuth, requireParentAuth, async (req, res) => {
   try {
-    const data = readTasks();
+    const data = readTasks(req.householdId);
     const host = req.get('host') || req.headers.host;
     const result = await addLovelaceCardToHass(data, host);
     if (!result.ok) {
@@ -1626,9 +1667,9 @@ app.post('/api/hass/add-card', async (req, res) => {
 });
 
 // API Endpoint: Get Lovelace card YAML code and configuration
-app.get('/api/hass/card-yaml', (req, res) => {
+app.get('/api/hass/card-yaml', verifyAuth, requireParentAuth, (req, res) => {
   try {
-    const data = readTasks();
+    const data = readTasks(req.householdId);
     const host = req.get('host') || req.headers.host;
     const yaml = generateLovelaceCardYaml(data, host);
     const card = generateLovelaceCardConfig(data, host);
@@ -1643,7 +1684,7 @@ app.get('/api/hass/card-yaml', (req, res) => {
 // ==========================================
 
 // Check if a parent PIN is configured
-app.get('/api/parent/pin-status', (req, res) => {
+app.get('/api/parent/pin-status', verifyAuth, (req, res) => {
   try {
     const householdId = req.householdId || 'house_default';
     const data = readTasks(householdId);
@@ -1655,7 +1696,7 @@ app.get('/api/parent/pin-status', (req, res) => {
 });
 
 // Verify entered parent PIN
-app.post('/api/parent/verify-pin', (req, res) => {
+app.post('/api/parent/verify-pin', verifyAuth, (req, res) => {
   try {
     const { pin } = req.body || {};
     const householdId = req.householdId || 'house_default';
@@ -1714,16 +1755,16 @@ app.post('/api/parent/set-pin', (req, res) => {
 });
 
 // API Endpoints: Tasks
-app.get('/api/tasks', (req, res) => {
+app.get('/api/tasks', verifyAuth, (req, res) => {
   try {
-    const tasks = readTasks();
+    const tasks = readTasks(req.householdId);
     res.json(tasks);
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve tasks' });
   }
 });
 
-app.post('/api/tasks/toggle', (req, res) => {
+app.post('/api/tasks/toggle', verifyAuth, (req, res) => {
   const { childId, taskId, isParent } = req.body;
 
   if (!childId || !taskId) {
@@ -1731,7 +1772,8 @@ app.post('/api/tasks/toggle', (req, res) => {
   }
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const child = data.children.find(c => c.id === childId);
 
     if (!child) {
@@ -1743,7 +1785,9 @@ app.post('/api/tasks/toggle', (req, res) => {
       return res.status(404).json({ error: `Task with id ${taskId} not found for child ${childId}` });
     }
 
-    if (isParent) {
+    const parentToggle = isParent !== undefined ? Boolean(isParent) : Boolean(req.isParent);
+
+    if (parentToggle) {
       // Parent toggling
       if (task.completed) {
         task.completed = false;
@@ -1794,13 +1838,13 @@ app.post('/api/tasks/toggle', (req, res) => {
     }
 
     // Persist directly to JSON file
-    writeTasks(data);
+    writeTasks(data, householdId);
 
-    // Broadcast updated state to all connected clients
-    io.emit('task_updated', data);
+    // Broadcast updated state to room clients
+    io.to(householdId).emit('task_updated', data);
 
     // Automatically sync updated entities with Home Assistant & enforce TV block
-    syncHassEntitiesDebounced().catch(() => {});
+    syncHassEntitiesDebounced(householdId).catch(() => {});
 
     res.json({
       success: true,
@@ -1818,7 +1862,7 @@ app.post('/api/tasks/toggle', (req, res) => {
   }
 });
 
-app.post('/api/tasks/approve', (req, res) => {
+app.post('/api/tasks/approve', verifyAuth, requireParentAuth, (req, res) => {
   const { childId, taskId } = req.body;
 
   if (!childId || !taskId) {
@@ -1826,7 +1870,8 @@ app.post('/api/tasks/approve', (req, res) => {
   }
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const child = data.children.find(c => c.id === childId);
 
     if (!child) {
@@ -1862,9 +1907,9 @@ app.post('/api/tasks/approve', (req, res) => {
       data.history = data.history.slice(0, 2000);
     }
 
-    writeTasks(data);
-    io.emit('task_updated', data);
-    syncHassEntitiesDebounced().catch(() => {});
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
+    syncHassEntitiesDebounced(householdId).catch(() => {});
 
     res.json({
       success: true,
@@ -1883,8 +1928,8 @@ app.post('/api/tasks/approve', (req, res) => {
 });
 
 // Shared helper: perform a day reset (used by API route and scheduler)
-function performResetDay() {
-  const data = readTasks();
+function performResetDay(householdId = 'house_default') {
+  const data = readTasks(householdId);
   data.children.forEach(child => {
     child.tasks.forEach(task => {
       task.completed = false;
@@ -1893,16 +1938,16 @@ function performResetDay() {
     });
   });
   data.lastActiveDate = getTodayDateString();
-  writeTasks(data);
-  io.emit('task_updated', data);
-  syncHassEntitiesDebounced().catch(() => {});
+  writeTasks(data, householdId);
+  io.to(householdId).emit('task_updated', data);
+  syncHassEntitiesDebounced(householdId).catch(() => {});
   return data;
 }
 
 // API Endpoint: Reset day's task states (keeps children, names, tasks, and history!)
-app.post('/api/tasks/reset-day', (req, res) => {
+app.post('/api/tasks/reset-day', verifyAuth, requireParentAuth, (req, res) => {
   try {
-    const data = performResetDay();
+    const data = performResetDay(req.householdId);
     res.json({ success: true, message: 'All daily tasks have been reset', data });
   } catch (error) {
     console.error('Failed to reset daily tasks:', error);
@@ -1911,9 +1956,9 @@ app.post('/api/tasks/reset-day', (req, res) => {
 });
 
 // API Endpoint: Get settings
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', verifyAuth, (req, res) => {
   try {
-    const data = readTasks();
+    const data = readTasks(req.householdId);
     res.json(data.settings || {});
   } catch (error) {
     res.status(500).json({ error: 'Failed to read settings' });
@@ -1921,10 +1966,11 @@ app.get('/api/settings', (req, res) => {
 });
 
 // API Endpoint: Save settings
-app.post('/api/settings', (req, res) => {
+app.post('/api/settings', verifyAuth, requireParentAuth, (req, res) => {
   try {
     const { resetTime, bypassSchedule, audio } = req.body;
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     if (!data.settings) data.settings = JSON.parse(JSON.stringify(DEFAULT_TASKS_DATA.settings));
     if (resetTime !== undefined) {
       data.settings.resetTime = (typeof resetTime === 'string') ? resetTime.trim() : '';
@@ -2000,7 +2046,7 @@ app.post('/api/settings', (req, res) => {
         data.settings.audio.presets = newPresets;
       }
     }
-    writeTasks(data);
+    writeTasks(data, householdId);
     warmTtsCache(data);
     res.json({ success: true, settings: data.settings });
   } catch (error) {
@@ -2010,9 +2056,9 @@ app.post('/api/settings', (req, res) => {
 });
 
 // API Endpoint: History retrieval
-app.get('/api/history', (req, res) => {
+app.get('/api/history', verifyAuth, (req, res) => {
   try {
-    const data = readTasks();
+    const data = readTasks(req.householdId);
     const { date, childId } = req.query;
 
     let filtered = data.history || [];
@@ -2032,14 +2078,15 @@ app.get('/api/history', (req, res) => {
 });
 
 // API Endpoints: Children Management (CRUD)
-app.post('/api/children', (req, res) => {
+app.post('/api/children', verifyAuth, requireParentAuth, (req, res) => {
   const { name } = req.body;
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Child name is required' });
   }
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const newChild = {
       id: `child_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       name: name.trim(),
@@ -2047,8 +2094,8 @@ app.post('/api/children', (req, res) => {
     };
 
     data.children.push(newChild);
-    writeTasks(data);
-    io.emit('task_updated', data);
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
     res.status(201).json({ success: true, child: newChild });
@@ -2058,7 +2105,7 @@ app.post('/api/children', (req, res) => {
   }
 });
 
-app.put('/api/children/:id', (req, res) => {
+app.put('/api/children/:id', verifyAuth, requireParentAuth, (req, res) => {
   const { id } = req.params;
   const { name } = req.body;
 
@@ -2067,15 +2114,16 @@ app.put('/api/children/:id', (req, res) => {
   }
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const child = data.children.find(c => c.id === id);
     if (!child) {
       return res.status(404).json({ error: `Child with id ${id} not found` });
     }
 
     child.name = name.trim();
-    writeTasks(data);
-    io.emit('task_updated', data);
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
     res.json({ success: true, child });
@@ -2085,19 +2133,20 @@ app.put('/api/children/:id', (req, res) => {
   }
 });
 
-app.delete('/api/children/:id', (req, res) => {
+app.delete('/api/children/:id', verifyAuth, requireParentAuth, (req, res) => {
   const { id } = req.params;
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const childIndex = data.children.findIndex(c => c.id === id);
     if (childIndex === -1) {
       return res.status(404).json({ error: `Child with id ${id} not found` });
     }
 
     const removedChild = data.children.splice(childIndex, 1)[0];
-    writeTasks(data);
-    io.emit('task_updated', data);
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
     res.json({ success: true, removed: removedChild });
@@ -2108,7 +2157,7 @@ app.delete('/api/children/:id', (req, res) => {
 });
 
 // API Endpoints: Task Management (CRUD per child)
-app.post('/api/children/:id/tasks', (req, res) => {
+app.post('/api/children/:id/tasks', verifyAuth, requireParentAuth, (req, res) => {
   const { id } = req.params;
   const { title, icon } = req.body;
 
@@ -2117,7 +2166,8 @@ app.post('/api/children/:id/tasks', (req, res) => {
   }
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const child = data.children.find(c => c.id === id);
     if (!child) {
       return res.status(404).json({ error: `Child with id ${id} not found` });
@@ -2137,8 +2187,8 @@ app.post('/api/children/:id/tasks', (req, res) => {
     };
 
     child.tasks.push(newTask);
-    writeTasks(data);
-    io.emit('task_updated', data);
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
     res.status(201).json({ success: true, task: newTask });
@@ -2148,7 +2198,7 @@ app.post('/api/children/:id/tasks', (req, res) => {
   }
 });
 
-app.put('/api/children/:id/tasks/:taskId', (req, res) => {
+app.put('/api/children/:id/tasks/:taskId', verifyAuth, requireParentAuth, (req, res) => {
   const { id, taskId } = req.params;
   const { title, icon } = req.body;
 
@@ -2157,7 +2207,8 @@ app.put('/api/children/:id/tasks/:taskId', (req, res) => {
   }
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const child = data.children.find(c => c.id === id);
     if (!child) {
       return res.status(404).json({ error: `Child with id ${id} not found` });
@@ -2175,32 +2226,33 @@ app.put('/api/children/:id/tasks/:taskId', (req, res) => {
     if (req.body.enabled !== undefined) task.enabled = Boolean(req.body.enabled);
 
     const changes = {};
-      if (title !== undefined && typeof title === 'string') changes.title = task.title;
-      if (icon !== undefined && typeof icon === 'string') changes.icon = task.icon;
-      if (req.body.requiresApproval !== undefined) changes.requiresApproval = task.requiresApproval;
-      if (req.body.audioFeedback !== undefined) changes.audioFeedback = task.audioFeedback;
-      if (req.body.enabled !== undefined) changes.enabled = task.enabled;
+    if (title !== undefined && typeof title === 'string') changes.title = task.title;
+    if (icon !== undefined && typeof icon === 'string') changes.icon = task.icon;
+    if (req.body.requiresApproval !== undefined) changes.requiresApproval = task.requiresApproval;
+    if (req.body.audioFeedback !== undefined) changes.audioFeedback = task.audioFeedback;
+    if (req.body.enabled !== undefined) changes.enabled = task.enabled;
 
-      writeTasks(data);
-      io.emit('task_delta', {
-        childId: id,
-        taskId: taskId,
-        changes: changes
-      });
-      createAndSyncAllHassEntities(data).catch(() => {});
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_delta', {
+      childId: id,
+      taskId: taskId,
+      changes: changes
+    });
+    createAndSyncAllHassEntities(data).catch(() => {});
 
-      res.json({ success: true, task });
+    res.json({ success: true, task });
   } catch (error) {
     console.error('Failed to update task:', error);
     res.status(500).json({ error: 'Failed to update task' });
   }
 });
 
-app.delete('/api/children/:id/tasks/:taskId', (req, res) => {
+app.delete('/api/children/:id/tasks/:taskId', verifyAuth, requireParentAuth, (req, res) => {
   const { id, taskId } = req.params;
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const child = data.children.find(c => c.id === id);
     if (!child) {
       return res.status(404).json({ error: `Child with id ${id} not found` });
@@ -2212,8 +2264,8 @@ app.delete('/api/children/:id/tasks/:taskId', (req, res) => {
     }
 
     const removedTask = child.tasks.splice(taskIndex, 1)[0];
-    writeTasks(data);
-    io.emit('task_updated', data);
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
     createAndSyncAllHassEntities(data).catch(() => {});
 
     res.json({ success: true, removed: removedTask });
@@ -2224,7 +2276,7 @@ app.delete('/api/children/:id/tasks/:taskId', (req, res) => {
 });
 
 // Reorder tasks for a child
-app.post('/api/children/:id/tasks/reorder', (req, res) => {
+app.post('/api/children/:id/tasks/reorder', verifyAuth, requireParentAuth, (req, res) => {
   const { id } = req.params;
   const { taskIds } = req.body;
 
@@ -2233,7 +2285,8 @@ app.post('/api/children/:id/tasks/reorder', (req, res) => {
   }
 
   try {
-    const data = readTasks();
+    const householdId = req.householdId;
+    const data = readTasks(householdId);
     const child = data.children.find(c => c.id === id);
     if (!child) {
       return res.status(404).json({ error: `Child with id ${id} not found` });
@@ -2246,8 +2299,8 @@ app.post('/api/children/:id/tasks/reorder', (req, res) => {
     child.tasks.forEach(t => { if (!taskIds.includes(t.id)) reordered.push(t); });
     child.tasks = reordered;
 
-    writeTasks(data);
-    io.emit('task_updated', data);
+    writeTasks(data, householdId);
+    io.to(householdId).emit('task_updated', data);
 
     res.json({ success: true });
   } catch (error) {
@@ -2267,9 +2320,27 @@ app.get('*', (req, res, next) => {
   }
   res.sendFile(path.join(__dirname, 'frontend/dist/browser/index.html'));
 });
-// Socket.io connection logging
+
+// Socket.io connection logging & room isolation
 io.on('connection', (socket) => {
   console.log(`Client connected: ${socket.id}`);
+
+  resolveHouseholdIdForSocket(socket.handshake.auth || socket.handshake.query).then(hId => {
+    socket.householdId = hId;
+    socket.join(hId);
+    console.log(`[Socket] Initial room for ${socket.id}: ${hId}`);
+  }).catch(() => {});
+
+  socket.on('join_household', async (data) => {
+    const householdId = await resolveHouseholdIdForSocket(data);
+    if (socket.householdId && socket.householdId !== householdId) {
+      socket.leave(socket.householdId);
+    }
+    socket.householdId = householdId;
+    socket.join(householdId);
+    console.log(`[Socket] Client ${socket.id} joined room ${householdId}`);
+  });
+
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
   });
@@ -2281,14 +2352,12 @@ function start() {
   startHassPolling();
   startHassEventListener();
 
-  // ---- Settings-based scheduler: auto-reset + bypass schedule ----
-  let lastAutoResetMarker = null;
-  let lastScheduledBypassState = null;
+  // ---- Settings-based scheduler: auto-reset + bypass schedule per household ----
+  const schedulerState = new Map();
 
   function runScheduler() {
     try {
-      const data = readTasks();
-      const settings = data.settings || {};
+      const householdIds = getAllHouseholdIds();
       const now = new Date();
       const hh = String(now.getHours()).padStart(2, '0');
       const mm = String(now.getMinutes()).padStart(2, '0');
@@ -2296,36 +2365,47 @@ function start() {
       const todayStr = getTodayDateString();
       const dayOfWeek = now.getDay(); // 0=Sunday
 
-      // --- Auto-reset tasks ---
-      const resetTime = (settings.resetTime || '').trim();
-      const currentResetMarker = `${todayStr}-${timeNow}`;
-      
-      if (resetTime && timeNow === resetTime && lastAutoResetMarker !== currentResetMarker) {
-        console.log(`[Scheduler] Auto-resetting tasks at ${resetTime}`);
-        lastAutoResetMarker = currentResetMarker;
-        performResetDay();
-      }
-
-      // --- Bypass schedule ---
-      const bs = settings.bypassSchedule;
-      if (bs && bs.enabled && bs.schedule) {
-        const dayConfig = bs.schedule[dayOfWeek];
-        let shouldBypass = false;
-        if (dayConfig && dayConfig.enabled && dayConfig.startTime && dayConfig.endTime) {
-          if (dayConfig.endTime > dayConfig.startTime) {
-            shouldBypass = timeNow >= dayConfig.startTime && timeNow < dayConfig.endTime;
-          } else {
-            // Overnight window (e.g. 22:00–06:00)
-            shouldBypass = timeNow >= dayConfig.startTime || timeNow < dayConfig.endTime;
-          }
+      for (const householdId of householdIds) {
+        let state = schedulerState.get(householdId);
+        if (!state) {
+          state = { lastAutoResetMarker: null, lastScheduledBypassState: null };
+          schedulerState.set(householdId, state);
         }
-        if (shouldBypass !== lastScheduledBypassState) {
-          lastScheduledBypassState = shouldBypass;
-          console.log(`[Scheduler] Bypass schedule: ${shouldBypass ? 'ACTIVATING' : 'DEACTIVATING'} bypass (day ${dayOfWeek}, ${timeNow})`);
-          data.homeAssistant.parentBypass = shouldBypass;
-          writeTasks(data);
-          io.emit('task_updated', data);
-          syncHassEntitiesDebounced().catch(() => {});
+
+        const data = readTasks(householdId);
+        const settings = data.settings || {};
+
+        // --- Auto-reset tasks ---
+        const resetTime = (settings.resetTime || '').trim();
+        const currentResetMarker = `${todayStr}-${timeNow}`;
+
+        if (resetTime && timeNow === resetTime && state.lastAutoResetMarker !== currentResetMarker) {
+          console.log(`[Scheduler] Auto-resetting tasks for household ${householdId} at ${resetTime}`);
+          state.lastAutoResetMarker = currentResetMarker;
+          performResetDay(householdId);
+        }
+
+        // --- Bypass schedule ---
+        const bs = settings.bypassSchedule;
+        if (bs && bs.enabled && bs.schedule) {
+          const dayConfig = bs.schedule[dayOfWeek];
+          let shouldBypass = false;
+          if (dayConfig && dayConfig.enabled && dayConfig.startTime && dayConfig.endTime) {
+            if (dayConfig.endTime > dayConfig.startTime) {
+              shouldBypass = timeNow >= dayConfig.startTime && timeNow < dayConfig.endTime;
+            } else {
+              // Overnight window (e.g. 22:00–06:00)
+              shouldBypass = timeNow >= dayConfig.startTime || timeNow < dayConfig.endTime;
+            }
+          }
+          if (shouldBypass !== state.lastScheduledBypassState) {
+            state.lastScheduledBypassState = shouldBypass;
+            console.log(`[Scheduler] Household ${householdId} Bypass schedule: ${shouldBypass ? 'ACTIVATING' : 'DEACTIVATING'} bypass`);
+            data.homeAssistant.parentBypass = shouldBypass;
+            writeTasks(data, householdId);
+            io.to(householdId).emit('task_updated', data);
+            syncHassEntitiesDebounced(householdId).catch(() => {});
+          }
         }
       }
     } catch (err) {

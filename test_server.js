@@ -214,7 +214,7 @@ async function runTests() {
 
   // 2. Start kids-tasker server
   const serverProcess = spawn('node', ['server.js'], {
-    env: { ...process.env, PORT: TEST_PORT.toString(), DB_DIR: TEST_DB_DIR },
+    env: { ...process.env, NODE_ENV: 'test', PORT: TEST_PORT.toString(), DB_DIR: TEST_DB_DIR },
     stdio: 'pipe'
   });
 
