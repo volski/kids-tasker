@@ -42,7 +42,7 @@ export class SettingsTabComponent implements OnInit {
   async loadSettings() {
     try {
       const s = await this.settingsService.getSettings().toPromise();
-      this.settings.set(s || {});
+      this.settings.set(s?.settings || {});
     } catch (e: any) {
       this.shell.showToast('שגיאה בטעינת הגדרות: ' + e.message, 'error');
     }
@@ -78,7 +78,7 @@ export class SettingsTabComponent implements OnInit {
     const resetTime = enabled ? (time || '06:00') : '';
     try {
       const s = await this.settingsService.updateSettings({ resetTime }).toPromise();
-      this.settings.set(s || {});
+      this.settings.set(s?.settings || {});
       this.shell.showToast('הגדרות האיפוס נשמרו ✓');
     } catch (e: any) {
       this.shell.showToast('שגיאה בשמירת הגדרות: ' + e.message, 'error');
@@ -97,7 +97,7 @@ export class SettingsTabComponent implements OnInit {
 
     try {
       const s = await this.settingsService.updateSettings({ bypassSchedule: { enabled, schedule } }).toPromise();
-      this.settings.set(s || {});
+      this.settings.set(s?.settings || {});
       this.shell.showToast('לוח הזמנים נשמר ✓');
     } catch (e: any) {
       this.shell.showToast('שגיאה בשמירת לוח הזמנים: ' + e.message, 'error');
@@ -106,8 +106,8 @@ export class SettingsTabComponent implements OnInit {
 
   async saveAudioPresets(presets: any[]) {
     try {
-      const s = await this.settingsService.updateSettings({ audio: { presets } }).toPromise();
-      this.settings.set(s || {});
+      const res = await this.settingsService.updateSettings({ audio: { presets } }).toPromise();
+      this.settings.set(res?.settings || {});
       this.shell.showToast('הגדרות צלילים נשמרו ✓');
       this.taskService.loadData().subscribe(); // refresh data in case manage tab is loaded
     } catch (e: any) {
