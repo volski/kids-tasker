@@ -114,13 +114,25 @@ export class DevicePairingComponent implements OnInit, OnDestroy {
   public sessionId = signal<string>('');
   
   private pollTimer: any = null;
+  private socketPairedCallback: any = null;
 
   ngOnInit() {
     this.initSession();
   }
 
   ngOnDestroy() {
-    if (this.pollTimer) clearInterval(this.pollTimer);
+    this.cleanupListeners();
+  }
+
+  private cleanupListeners() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+    if (this.socketPairedCallback && this.sessionId()) {
+      this.socketService.off(`device_paired_${this.sessionId()}`, this.socketPairedCallback);
+      this.socketPairedCallback = null;
+    }
   }
 
   public goToLogin() {
@@ -128,6 +140,7 @@ export class DevicePairingComponent implements OnInit, OnDestroy {
   }
 
   public async initSession() {
+    this.cleanupListeners();
     this.isLoading.set(true);
     this.errorMsg.set(null);
 
@@ -149,6 +162,14 @@ export class DevicePairingComponent implements OnInit, OnDestroy {
             console.error('Failed to generate QR Code', e);
           }
 
+          // Socket event listener for instant pairing
+          this.socketPairedCallback = (data: any) => {
+            if (data && (data.deviceToken || data.success)) {
+              this.handlePairingSuccess(data);
+            }
+          };
+          this.socketService.on(`device_paired_${res.sessionId}`, this.socketPairedCallback);
+
           // Start polling for pairing completion status
           this.startPollingStatus(res.sessionId);
         } else {
@@ -162,25 +183,32 @@ export class DevicePairingComponent implements OnInit, OnDestroy {
     });
   }
 
+  private handlePairingSuccess(data: { deviceToken?: string; householdId?: string }) {
+    this.cleanupListeners();
+
+    // Save device token locally & set active household ID
+    if (data.deviceToken) {
+      localStorage.setItem('kids_tasker_device_token', data.deviceToken);
+    }
+    if (data.householdId) {
+      localStorage.setItem('kids_tasker_household_id', data.householdId);
+    }
+
+    // Connect Socket.io with new device credentials
+    this.socketService.connect();
+
+    // Redirect immediately to Kids Board
+    this.router.navigate(['/']);
+  }
+
   private startPollingStatus(sessId: string) {
     if (this.pollTimer) clearInterval(this.pollTimer);
 
     this.pollTimer = setInterval(() => {
       this.http.get<any>(`/api/pairing/status/${sessId}`).subscribe({
         next: (res) => {
-          if (res && res.status === 'paired' && res.deviceToken) {
-            clearInterval(this.pollTimer);
-            // Save device token locally & set active household ID
-            localStorage.setItem('kids_tasker_device_token', res.deviceToken);
-            if (res.householdId) {
-              localStorage.setItem('kids_tasker_household_id', res.householdId);
-            }
-            
-            // Connect Socket.io with new device credentials
-            this.socketService.connect();
-
-            // Redirect immediately to Kids Board
-            this.router.navigate(['/']);
+          if (res && (res.status === 'paired' || res.paired) && res.deviceToken) {
+            this.handlePairingSuccess(res);
           }
         }
       });

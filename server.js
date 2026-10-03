@@ -1347,7 +1347,7 @@ const handlePairingStatus = (req, res) => {
     const sess = sessions[sessionId];
     if (!sess) return res.status(404).json({ paired: false, error: 'Session not found' });
     if (sess.status === 'paired') {
-      return res.json({ paired: true, deviceToken: sess.deviceToken, householdId: sess.householdId });
+      return res.json({ paired: true, status: 'paired', deviceToken: sess.deviceToken, householdId: sess.householdId });
     }
     res.json({ paired: false, status: sess.status });
   } catch (err) {
