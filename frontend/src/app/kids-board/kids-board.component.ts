@@ -75,6 +75,10 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
     }
   }
 
+  get isConnectedDisplay(): boolean {
+    return Boolean(localStorage.getItem('kids_tasker_device_token'));
+  }
+
   ngOnInit(): void {
     this.fetchTasks();
     this.socketSub = this.socketService.onTaskUpdated.subscribe(data => {
