@@ -1835,7 +1835,7 @@ app.post('/api/parent/verify-pin', verifyAuth, (req, res) => {
       return res.json({ success: true, message: 'קוד ה-PIN אומת בהצלחה' });
     }
 
-    return res.status(401).json({ success: false, error: 'קוד ה-PIN שגוי. נסה שוב.' });
+    return res.status(400).json({ success: false, error: 'קוד ה-PIN שגוי. נסה שוב.' });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to verify PIN' });
   }
@@ -1853,7 +1853,7 @@ app.post('/api/parent/set-pin', verifyAuth, (req, res) => {
     // If a PIN already exists, require valid currentPin unless caller is an authenticated parent user
     if (existingPin && existingPin.length >= 4 && !req.user) {
       if (!currentPin || String(currentPin).trim() !== existingPin) {
-        return res.status(401).json({ success: false, error: 'קוד ה-PIN הנוכחי אינו נכון.' });
+        return res.status(400).json({ success: false, error: 'קוד ה-PIN הנוכחי אינו נכון.' });
       }
     }
 

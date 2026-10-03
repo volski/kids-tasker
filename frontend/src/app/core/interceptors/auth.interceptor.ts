@@ -34,8 +34,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       const cloned = req.clone({ headers });
       return next(cloned).pipe(
         catchError((error: HttpErrorResponse) => {
-          // Handle 401 Unauthorized / Token Expiration / Device Revocation
-          if (error.status === 401) {
+          // Handle 401 Unauthorized / Token Expiration / Device Revocation (ignoring PIN verification errors)
+          const isPinEndpoint = req.url.includes('/api/parent/verify-pin') || req.url.includes('/api/parent/set-pin');
+          if (error.status === 401 && !isPinEndpoint) {
             if (idToken) {
               // Attempt to force refresh the token once and retry
               return from(authService.getIdToken(true)).pipe(

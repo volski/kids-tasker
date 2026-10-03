@@ -109,7 +109,10 @@ export class PinModalComponent implements OnInit {
             this.currentPin = '';
           }
         },
-        error: () => this.showError('שגיאת תקשורת, נסה שוב'),
+        error: (err) => {
+          this.showError(err.error?.error || err.error?.message || 'קוד שגוי, נסה שוב');
+          this.currentPin = '';
+        }
       });
     } else if (m === 'setup_enter') {
       if (this.currentPin.length < MIN_PIN) { this.showError('יש להזין לפחות 4 ספרות'); return; }
@@ -128,9 +131,13 @@ export class PinModalComponent implements OnInit {
             this.verified.emit();
           } else {
             this.showError(res.error || 'שגיאה בשמירת הקוד');
+            this.currentPin = '';
           }
         },
-        error: () => this.showError('שגיאת תקשורת, נסה שוב'),
+        error: (err) => {
+          this.showError(err.error?.error || err.error?.message || 'שגיאה בשמירת הקוד');
+          this.currentPin = '';
+        }
       });
     }
   }

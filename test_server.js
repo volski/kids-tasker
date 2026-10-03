@@ -578,6 +578,26 @@ async function runTests() {
     }
     console.log('✓ Verified POST /api/hass/bypass accepts Home Assistant webhook payload ({ state: "off" })');
 
+    // 8d. Verify PIN verification endpoint returns 400 Bad Request (not 401 Unauthorized) on incorrect PIN
+    await fetch(`http://localhost:${TEST_PORT}/api/parent/set-pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '1234' })
+    });
+    const wrongPinRes = await fetch(`http://localhost:${TEST_PORT}/api/parent/verify-pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '9999' })
+    });
+    if (wrongPinRes.status !== 400) {
+      throw new Error(`Expected HTTP 400 status for wrong PIN, got ${wrongPinRes.status}`);
+    }
+    const wrongPinData = await wrongPinRes.json();
+    if (wrongPinData.success !== false || !wrongPinData.error) {
+      throw new Error(`Expected success: false and error message for wrong PIN, got ${JSON.stringify(wrongPinData)}`);
+    }
+    console.log('✓ Verified: Incorrect PIN returns HTTP 400 Bad Request error response (prevents display logout)');
+
     // 9. Household & Multi-Parent Management Unit Tests
     const dbManager = require('./db_manager');
     const h1 = dbManager.createHousehold('user_owner_1', 'parent1@test.com', 'משפחת כהן');
