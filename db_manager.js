@@ -44,17 +44,6 @@ function getHouseholdTasksPath(householdId) {
 function readHouseholdTasks(householdId, defaultData) {
   const file = getHouseholdTasksPath(householdId);
   if (!fs.existsSync(file)) {
-    // Only migrate legacy single-tenant DB file for default legacy household
-    if (householdId === 'house_default' || householdId === 'default') {
-      const legacyFile = path.join(DB_DIR, 'tasks.json');
-      if (fs.existsSync(legacyFile)) {
-        const legacyData = readJsonFile(legacyFile, null);
-        if (legacyData) {
-          writeJsonFile(file, legacyData);
-          return legacyData;
-        }
-      }
-    }
     const freshData = defaultData ? JSON.parse(JSON.stringify(defaultData)) : {};
     writeJsonFile(file, freshData);
     return freshData;
@@ -242,7 +231,7 @@ function generateFamilyJoinCode() {
 }
 
 function getHouseholdIdForUser(uid, email = '') {
-  if (!uid) return 'house_default';
+  if (!uid) return null;
   const mappings = readUserMappings();
   if (mappings[uid] && mappings[uid].householdId) {
     return mappings[uid].householdId;

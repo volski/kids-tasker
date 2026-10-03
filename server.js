@@ -279,11 +279,11 @@ async function resolveHouseholdIdForSocket(data) {
   if (process.env.NODE_ENV === 'test') {
     return 'house_test';
   }
-  return 'house_default';
+  return null;
 }
 
 function getAllHouseholdIds() {
-  const set = new Set(['house_default']);
+  const set = new Set();
   try {
     const registry = readHouseholdsRegistry();
     Object.keys(registry).forEach(id => set.add(id));
@@ -462,7 +462,8 @@ function initTasksStorage() {
   }
 }
 
-function readTasks(householdId = 'house_default') {
+function readTasks(householdId) {
+  if (!householdId) return normalizeTasksData(DEFAULT_TASKS_DATA);
   try {
     const rawData = readHouseholdTasks(householdId, DEFAULT_TASKS_DATA);
     return normalizeTasksData(rawData);
@@ -472,7 +473,8 @@ function readTasks(householdId = 'house_default') {
   }
 }
 
-function writeTasks(data, householdId = 'house_default') {
+function writeTasks(data, householdId) {
+  if (!householdId) return;
   try {
     writeHouseholdTasks(householdId, data);
   } catch (error) {
@@ -701,7 +703,8 @@ async function createAndSyncAllHassEntities(data) {
 let isSyncingHass = false;
 let hassSyncPending = false;
 
-async function syncHassEntitiesDebounced(householdId = 'house_default') {
+async function syncHassEntitiesDebounced(householdId) {
+  if (!householdId) return;
   if (isSyncingHass) {
     hassSyncPending = true;
     return;
@@ -1074,7 +1077,8 @@ let hassListenerWs = null;
 let hassListenerReconnectTimer = null;
 let hassListenerSubId = null;
 
-function handleExternalParentBypassChange(isBypass, householdId = (process.env.NODE_ENV === 'test' ? 'house_test' : 'house_default')) {
+function handleExternalParentBypassChange(isBypass, householdId = (process.env.NODE_ENV === 'test' ? 'house_test' : null)) {
+  if (!householdId) return;
   try {
     const data = readTasks(householdId);
     if (!data.homeAssistant) {
@@ -1093,8 +1097,9 @@ function handleExternalParentBypassChange(isBypass, householdId = (process.env.N
   }
 }
 
-function startHassEventListener(householdId = (process.env.NODE_ENV === 'test' ? 'house_test' : 'house_default')) {
+function startHassEventListener(householdId = (process.env.NODE_ENV === 'test' ? 'house_test' : null)) {
   stopHassEventListener();
+  if (!householdId) return;
 
   const data = readTasks(householdId);
   const hass = data.homeAssistant;
@@ -1576,7 +1581,8 @@ app.get('/api/hass/status', (req, res, next) => {
   verifyAuth(req, res, () => next()).catch(() => next());
 }, (req, res) => {
   try {
-    const householdId = req.householdId || 'house_default';
+    const householdId = req.householdId;
+    if (!householdId) return res.status(400).json({ error: 'נדרש שיוך למשפחה' });
     const data = readTasks(householdId);
     const status = calculateCompletionStatus(data);
     const parentBypass = Boolean(data.homeAssistant?.parentBypass);
@@ -1615,7 +1621,8 @@ app.get('/api/hass/status', (req, res, next) => {
 // API Endpoint: Toggle Parent TV Bypass
 app.post('/api/hass/bypass', verifyAuth, requireParentAuth, async (req, res) => {
   try {
-    const householdId = req.householdId || 'house_default';
+    const householdId = req.householdId;
+    if (!householdId) return res.status(400).json({ error: 'נדרש שיוך למשפחה' });
     const data = readTasks(householdId);
     if (!data.homeAssistant) {
       data.homeAssistant = { ...DEFAULT_HASS_CONFIG };
@@ -1799,7 +1806,8 @@ app.get('/api/hass/card-yaml', verifyAuth, requireParentAuth, (req, res) => {
 // Check if a parent PIN is configured
 app.get('/api/parent/pin-status', verifyAuth, (req, res) => {
   try {
-    const householdId = req.householdId || 'house_default';
+    const householdId = req.householdId;
+    if (!householdId) return res.status(400).json({ success: false, error: 'נדרש שיוך למשפחה' });
     const data = readTasks(householdId);
     const hasPin = Boolean(data.parentPin && String(data.parentPin).trim().length >= 4);
     res.json({ success: true, hasPin });
@@ -1812,7 +1820,8 @@ app.get('/api/parent/pin-status', verifyAuth, (req, res) => {
 app.post('/api/parent/verify-pin', verifyAuth, (req, res) => {
   try {
     const { pin } = req.body || {};
-    const householdId = req.householdId || 'house_default';
+    const householdId = req.householdId;
+    if (!householdId) return res.status(400).json({ success: false, error: 'נדרש שיוך למשפחה' });
     const data = readTasks(householdId);
     const existingPin = data.parentPin ? String(data.parentPin).trim() : null;
 
@@ -1836,7 +1845,8 @@ app.post('/api/parent/verify-pin', verifyAuth, (req, res) => {
 app.post('/api/parent/set-pin', verifyAuth, (req, res) => {
   try {
     const { pin, confirmPin, currentPin } = req.body || {};
-    const householdId = req.householdId || 'house_default';
+    const householdId = req.householdId;
+    if (!householdId) return res.status(400).json({ success: false, error: 'נדרש שיוך למשפחה' });
     const data = readTasks(householdId);
     const existingPin = data.parentPin ? String(data.parentPin).trim() : null;
 
@@ -2041,7 +2051,8 @@ app.post('/api/tasks/approve', verifyAuth, requireParentAuth, (req, res) => {
 });
 
 // Shared helper: perform a day reset (used by API route and scheduler)
-function performResetDay(householdId = 'house_default') {
+function performResetDay(householdId) {
+  if (!householdId) return null;
   const data = readTasks(householdId);
   data.children.forEach(child => {
     child.tasks.forEach(task => {

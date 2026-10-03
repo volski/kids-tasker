@@ -75,7 +75,7 @@ async function runFullE2ETestSuite() {
     'dev_e2e_1': {
       deviceId: 'dev_e2e_1',
       deviceToken: 'test_token_paired_123',
-      householdId: 'house_default',
+      householdId: 'house_test',
       deviceName: 'Test Display Screen',
       status: 'allowed'
     }
@@ -84,10 +84,6 @@ async function runFullE2ETestSuite() {
   fs.writeFileSync(path.join(TEST_DB_DIR, 'tasks.json'), JSON.stringify(initialTasks, null, 2));
   fs.writeFileSync(path.join(TEST_DB_DIR, 'settings.json'), JSON.stringify(initialSettings, null, 2));
   fs.writeFileSync(path.join(TEST_DB_DIR, 'devices.json'), JSON.stringify(initialDevices, null, 2));
-
-  const houseDefaultDir = path.join(TEST_DB_DIR, 'households', 'house_default');
-  fs.mkdirSync(houseDefaultDir, { recursive: true });
-  fs.writeFileSync(path.join(houseDefaultDir, 'tasks.json'), JSON.stringify(initialTasks, null, 2));
 
   const houseTestDir = path.join(TEST_DB_DIR, 'households', 'house_test');
   fs.mkdirSync(houseTestDir, { recursive: true });

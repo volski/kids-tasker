@@ -135,7 +135,10 @@ async function verifyAuth(req, res, next) {
   // 3. Parent PIN Unlocked Request (Standalone / PIN Mode)
   if (req.headers['x-parent-unlocked'] === '1') {
     req.isParent = true;
-    req.householdId = req.headers['x-household-id'] || 'house_default';
+    req.householdId = req.headers['x-household-id'] || null;
+    if (!req.householdId) {
+      return res.status(400).json({ error: 'נדרש שיוך למשפחה' });
+    }
     return next();
   }
 
