@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import * as QRCode from 'qrcode';
 import { HouseholdService, HouseholdInfo, FamilyMember } from '../../services/household.service';
@@ -344,6 +345,7 @@ export class DevicesTabComponent implements OnInit {
   private http = inject(HttpClient);
   private householdService = inject(HouseholdService);
   private authService = inject(FirebaseAuthService);
+  private router = inject(Router);
   private shell = inject(ParentShellComponent, { optional: true });
 
   public household = signal<HouseholdInfo | null>(null);
@@ -503,11 +505,11 @@ export class DevicesTabComponent implements OnInit {
     if (!confirm('האם אתה בטוח שברצונך למחוק את המשפחה? כל חברי המשפחה ינותקו והנתונים יימחקו. פעולה זו אינה הפיכה!')) return;
 
     this.householdService.deleteHousehold().subscribe({
-      next: (res) => {
+      next: async (res) => {
         if (res && res.success) {
           if (this.shell) this.shell.showToast('המשפחה נמחקה בהצלחה ✓', 'success');
-          this.household.set(res.newHousehold || null);
-          this.showFamilyModal.set(true);
+          await this.authService.logout();
+          this.router.navigate(['/']);
         }
       },
       error: (err) => {

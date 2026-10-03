@@ -88,11 +88,10 @@ export class ParentShellComponent implements OnInit, OnDestroy {
       this.taskService.loadData().subscribe();
     });
 
-    this.householdDeletedSub = this.socketService.onHouseholdDeleted.subscribe(() => {
+    this.householdDeletedSub = this.socketService.onHouseholdDeleted.subscribe(async () => {
       this.showToast('המשפחה נמחקה על ידי מנהל המשפחה.', 'error');
-      localStorage.removeItem('kids_tasker_household_id');
-      this.householdService.getMyHousehold().subscribe();
-      this.taskService.loadData().subscribe();
+      await this.authService.logout();
+      this.router.navigate(['/']);
     });
 
     setInterval(() => {

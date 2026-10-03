@@ -599,17 +599,32 @@ function deleteHousehold(ownerUid) {
   });
   writeUserMappings(mappings);
 
+  // 1. Remove household folder and any legacy json file completely from storage
+  const householdDir = path.join(HOUSEHOLDS_DIR, hId);
+  if (fs.existsSync(householdDir)) {
+    try { fs.rmSync(householdDir, { recursive: true, force: true }); } catch (e) {}
+  }
   const filePath = path.join(HOUSEHOLDS_DIR, `${hId}.json`);
   if (fs.existsSync(filePath)) {
     try { fs.unlinkSync(filePath); } catch (e) {}
   }
 
-  const ownerEmail = mappings[ownerUid] ? mappings[ownerUid].email : '';
-  const newHouseholdId = getHouseholdIdForUser(ownerUid, ownerEmail);
+  // 2. Remove all devices registered to this household from devices.json
+  const devices = readDevices();
+  let devicesModified = false;
+  Object.keys(devices).forEach(devId => {
+    if (devices[devId] && devices[devId].householdId === hId) {
+      delete devices[devId];
+      devicesModified = true;
+    }
+  });
+  if (devicesModified) {
+    writeDevices(devices);
+  }
+
   return {
     deletedHouseholdId: hId,
-    affectedUids: Array.from(affectedUids),
-    newHousehold: getHouseholdInfo(newHouseholdId, ownerUid)
+    affectedUids: Array.from(affectedUids)
   };
 }
 
