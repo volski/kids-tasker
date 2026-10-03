@@ -179,4 +179,9 @@ export class ParentShellComponent implements OnInit, OnDestroy {
     }
     return 'whitespace-nowrap flex-shrink-0 px-4 py-2.5 rounded-xl font-bold text-sm transition flex items-center gap-2 bg-slate-800/80 text-slate-300 hover:bg-slate-800';
   }
+
+  async logoutUser() {
+    await this.authService.logout();
+    this.router.navigate(['/login']);
+  }
 }

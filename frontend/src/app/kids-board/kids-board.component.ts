@@ -8,6 +8,7 @@ import { Subscription } from 'rxjs';
 import { TaskService } from '../services/task.service';
 import { SocketService } from '../services/socket.service';
 import { PwaService } from '../services/pwa.service';
+import { FirebaseAuthService } from '../core/services/firebase-auth.service';
 import { AppData, Child, Task, AudioPreset } from '../models/task.model';
 import { PinModalComponent } from '../shared/pin-modal/pin-modal.component';
 
@@ -63,6 +64,7 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
     private router: Router,
     private cdr: ChangeDetectorRef,
     public pwa: PwaService,
+    public authService: FirebaseAuthService,
   ) {
     try {
       this.hebrewDate = new Intl.DateTimeFormat('he-IL', {
@@ -371,5 +373,15 @@ export class KidsBoardComponent implements OnInit, OnDestroy {
     document.body.style.transform = '';
     if (dy >= 120 && window.scrollY === 0) location.reload();
     this.pulling = false;
+  }
+
+  async logout(): Promise<void> {
+    await this.authService.logout();
+    this.showToast('התנתקת בהצלחה');
+    this.cdr.markForCheck();
+  }
+
+  goToLogin(): void {
+    this.router.navigate(['/login']);
   }
 }
